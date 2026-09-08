@@ -25,6 +25,7 @@ cp "$project_root/.build/$build_configuration/DeskMuxRelauncher" "$helpers_dir/D
 cp "$project_root/.build/$build_configuration/DeskMuxService" "$agent_macos_dir/DeskMuxService"
 mkdir -p "$contents/Resources"
 cp "$project_root/App/Resources/DeskMux.icns" "$contents/Resources/DeskMux.icns"
+cp "$project_root/docs/brand/mux.png" "$contents/Resources/Mux.png"
 cp "$project_root/App/Agent-Info.plist" "$agent_contents/Info.plist"
 cp "$project_root/App/dev.deskmux.agent.plist" "$launch_agents_dir/dev.deskmux.agent.plist"
 cp "$project_root/App/Info.plist" "$contents/Info.plist"

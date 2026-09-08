@@ -178,7 +178,7 @@ private struct DeskMuxCompactPanel: View {
     VStack(alignment: .leading, spacing: 14) {
       HStack(spacing: 10) {
         MuxMark()
-          .fill(DeskMuxBrand.teal, style: FillStyle(eoFill: true))
+          .fill(DeskMuxBrand.accent, style: FillStyle(eoFill: true))
           .frame(width: 30, height: 30)
         VStack(alignment: .leading, spacing: 2) {
           Text("DeskMux")
@@ -193,25 +193,11 @@ private struct DeskMuxCompactPanel: View {
           .frame(width: 9, height: 9)
       }
 
-      HStack(spacing: 12) {
-        Image(
-          systemName: backgroundAgent.inputOwnerName == "Studio"
-            ? "display" : "laptopcomputer"
-        )
-        .font(.title2)
-        .foregroundStyle(.tint)
-        .frame(width: 34)
-        VStack(alignment: .leading, spacing: 2) {
-          Text("Input is on \(backgroundAgent.inputOwnerName)")
-            .font(.callout.weight(.semibold))
-          Text("Keyboard and Logitech mouse move together")
-            .font(.caption2)
-            .foregroundStyle(.secondary)
-        }
-        Spacer()
+      HStack(spacing: 10) {
+        forEachDestination
       }
-      .padding(11)
-      .background(.quaternary.opacity(0.65), in: RoundedRectangle(cornerRadius: 10))
+      Text("Keyboard anchored to \(inputRelay.anchorName)")
+        .font(.caption).foregroundStyle(.secondary)
 
       if canSwitchFromThisMac,
         backgroundAgent.inputOwnerName == localName
@@ -223,6 +209,7 @@ private struct DeskMuxCompactPanel: View {
           )
         }
         .buttonStyle(.borderedProminent)
+        .tint(DeskMuxBrand.teal)
         .controlSize(.large)
         .frame(maxWidth: .infinity)
         .disabled(backgroundAgent.logitechSwitching)
@@ -233,6 +220,7 @@ private struct DeskMuxCompactPanel: View {
           backgroundAgent.returnInputToSource()
         }
         .buttonStyle(.borderedProminent)
+        .tint(DeskMuxBrand.teal)
         .tint(.orange)
       }
 
@@ -259,7 +247,7 @@ private struct DeskMuxCompactPanel: View {
       Divider()
 
       HStack {
-        Button("Settings…", systemImage: "gearshape") {
+        Button("Your desk…", systemImage: "rectangle.2.swap") {
           NSApplication.shared.activate(ignoringOtherApps: true)
           openSettings()
         }
@@ -269,8 +257,9 @@ private struct DeskMuxCompactPanel: View {
         }
       }
     }
-    .padding(16)
-    .frame(width: 320)
+    .padding(20)
+    .tint(DeskMuxBrand.accent)
+    .frame(width: 360)
     .task {
       while !Task.isCancelled {
         permissions.refresh()
@@ -278,6 +267,21 @@ private struct DeskMuxCompactPanel: View {
         inputRelay.configure(permissions: permissions.status)
         try? await Task.sleep(for: .seconds(1))
       }
+    }
+  }
+
+  private var forEachDestination: some View {
+    ForEach(["Studio", "MacBook"], id: \.self) { name in
+      let active = backgroundAgent.inputOwnerName == name
+      VStack(alignment: .leading, spacing: 10) {
+        Image(systemName: name == "Studio" ? "display" : "laptopcomputer").font(.title2)
+        Text(name).font(.callout.weight(.semibold))
+        Text(active ? "Input is here" : "Paired Mac").font(.caption2)
+      }
+      .frame(maxWidth: .infinity, alignment: .leading).padding(14)
+      .foregroundStyle(active ? .white : Color.primary)
+      .background(active ? DeskMuxBrand.teal : Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 14))
+      .accessibilityElement(children: .combine)
     }
   }
 }
@@ -288,31 +292,74 @@ private struct DeskMuxSettingsWindow: View {
   @ObservedObject var backgroundAgent: BackgroundAgentModel
   @ObservedObject var screenViewer: ScreenViewerModel
   @ObservedObject var launchAtLogin: LaunchAtLoginModel
+  @State private var selection = "Your desk"
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 18) {
-      DeskMuxBrandHeader()
-      TabView {
-      GeneralSettingsPage(
+    HStack(spacing: 0) {
+      VStack(alignment: .leading, spacing: 28) {
+        HStack(spacing: 10) {
+          Image(nsImage: DeskMuxBrand.menuBarMark).foregroundStyle(DeskMuxBrand.accent)
+          Text("DeskMux").font(.system(size: 21, weight: .semibold, design: .rounded))
+        }
+        .padding(.top, 16)
+        VStack(spacing: 6) {
+          navigation("Your desk", icon: "rectangle.2.swap")
+          navigation("Handoff", icon: "cursorarrow.motionlines")
+          navigation("Connection", icon: "network")
+          navigation("Displays", icon: "display.2")
+          navigation("Setup & access", icon: "checkmark.shield")
+        }
+        Spacer()
+        if let mascot = NSImage(named: "Mux") {
+          Image(nsImage: mascot).resizable().scaledToFit().frame(height: 130)
+            .accessibilityHidden(true)
+        }
+        VStack(alignment: .leading, spacing: 5) {
+          Text("A SMALL UTILITY.").font(.system(size: 9, weight: .bold, design: .monospaced))
+          Text("A better desk.").font(.system(size: 18, weight: .medium, design: .serif)).italic()
+          Text("V0.2 · DION LABS").font(.system(size: 8, design: .monospaced)).foregroundStyle(.secondary)
+        }
+      }
+      .padding(24)
+      .frame(width: 210)
+      .background(DeskMuxBrand.teal.opacity(0.07))
+      Divider()
+      VStack(alignment: .leading, spacing: 22) {
+        HStack {
+          Text("WORKSPACE / \(selection.uppercased())")
+            .font(.system(size: 10, weight: .medium, design: .monospaced)).foregroundStyle(.secondary)
+          Spacer()
+          Label(peerIsConnected(inputRelay: inputRelay, backgroundAgent: backgroundAgent) ? "Connected" : "Offline",
+                systemImage: "circle.fill")
+            .font(.caption).foregroundStyle(DeskMuxBrand.accent)
+        }
+        Group {
+        switch selection {
+        case "Your desk":
+          DeskOverview(
+            owner: backgroundAgent.inputOwnerName,
+            anchor: inputRelay.anchorName,
+            connected: peerIsConnected(inputRelay: inputRelay, backgroundAgent: backgroundAgent),
+            ready: localSetupIsReady(permissions: permissions, backgroundAgent: backgroundAgent),
+            openPage: { selection = $0 }
+          )
+        case "Handoff": GeneralSettingsPage(
         inputRelay: inputRelay,
         backgroundAgent: backgroundAgent,
         launchAtLogin: launchAtLogin
       )
-        .tabItem { Label("General", systemImage: "switch.2") }
-
-      ConnectionSettingsPage(inputRelay: inputRelay, backgroundAgent: backgroundAgent)
-        .tabItem { Label("Connection", systemImage: "network") }
-
-      DisplaySettingsPage(model: screenViewer, backgroundAgent: backgroundAgent)
-        .tabItem { Label("Displays · Preview", systemImage: "display.2") }
-
-      PermissionsSettingsPage(permissions: permissions, backgroundAgent: backgroundAgent)
-        .tabItem { Label("Permissions", systemImage: "hand.raised") }
+        case "Connection": ConnectionSettingsPage(inputRelay: inputRelay, backgroundAgent: backgroundAgent)
+        case "Displays": DisplaySettingsPage(model: screenViewer, backgroundAgent: backgroundAgent)
+        default: PermissionsSettingsPage(permissions: permissions, backgroundAgent: backgroundAgent)
+        }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
       }
+      .padding(30)
     }
-    .tint(DeskMuxBrand.teal)
-    .padding(20)
-    .frame(width: 720, height: 670)
+    .tint(DeskMuxBrand.accent)
+    .background(Color(nsColor: .windowBackgroundColor))
+    .frame(width: 980, height: 740)
     .task {
       while !Task.isCancelled {
         permissions.refresh()
@@ -322,6 +369,21 @@ private struct DeskMuxSettingsWindow: View {
         try? await Task.sleep(for: .seconds(1))
       }
     }
+  }
+
+  private func navigation(_ title: String, icon: String) -> some View {
+    Button { selection = title } label: {
+      HStack(spacing: 11) {
+        Image(systemName: icon).frame(width: 19)
+        Text(title).font(.system(size: 13, weight: selection == title ? .semibold : .regular))
+        Spacer()
+        if title == "Displays" { Text("LAB").font(.system(size: 8, design: .monospaced)).foregroundStyle(.secondary) }
+      }
+      .padding(12)
+      .background(selection == title ? DeskMuxBrand.teal.opacity(0.13) : .clear, in: RoundedRectangle(cornerRadius: 10))
+      .foregroundStyle(selection == title ? DeskMuxBrand.accent : .primary)
+      .contentShape(Rectangle())
+    }.buttonStyle(.plain)
   }
 }
 
@@ -352,6 +414,7 @@ private struct DisplaySettingsPage: View {
           openWindow(id: "remote-display")
         }
         .buttonStyle(.borderedProminent)
+        .tint(DeskMuxBrand.teal)
       }
       .padding(16)
       .background(.quaternary.opacity(0.65), in: RoundedRectangle(cornerRadius: 11))
@@ -596,6 +659,7 @@ private struct PermissionsSettingsPage: View {
               permissions.guideNextMissingPermission()
             }
             .buttonStyle(.borderedProminent)
+        .tint(DeskMuxBrand.teal)
             HStack {
               Text("Already enabled them? macOS may require an app restart.")
                 .font(.caption)
@@ -660,6 +724,7 @@ private struct LogitechMouseSection: View {
             )
           }
           .buttonStyle(.borderedProminent)
+        .tint(DeskMuxBrand.teal)
           .disabled(model.logitechSwitching)
         }
       } else if let error = model.logitechStatus?.error {
@@ -865,6 +930,7 @@ private struct BackgroundAgentSection: View {
           model.returnInputToSource()
         }
         .buttonStyle(.borderedProminent)
+        .tint(DeskMuxBrand.teal)
         .tint(.orange)
       }
 
@@ -880,12 +946,14 @@ private struct BackgroundAgentSection: View {
             model.enable()
           }
           .buttonStyle(.borderedProminent)
+        .tint(DeskMuxBrand.teal)
         }
         if model.needsApproval {
           Button("Open Login Items to Approve") {
             model.openLoginItems()
           }
           .buttonStyle(.borderedProminent)
+        .tint(DeskMuxBrand.teal)
         }
         if model.isEnabled,
           let status = model.agentStatus,
@@ -994,6 +1062,7 @@ private struct InputRelaySection: View {
           model.returnInputToSource()
         }
         .buttonStyle(.borderedProminent)
+        .tint(DeskMuxBrand.teal)
         .tint(.orange)
       }
 
@@ -1027,6 +1096,7 @@ private struct InputRelaySection: View {
         model.sendInput()
       }
       .buttonStyle(.borderedProminent)
+        .tint(DeskMuxBrand.teal)
       .disabled(
         !model.isLocalAnchor || !model.receiverReady || model.relayRunning
           || model.hasUnsavedPairingCode)
@@ -1106,6 +1176,7 @@ private struct PermissionRow: View {
           allow()
         }
         .buttonStyle(.borderedProminent)
+        .tint(DeskMuxBrand.teal)
         .controlSize(.small)
       }
     }

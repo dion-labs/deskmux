@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.0 — Your desk, redesigned
+
+- A two-Mac dashboard with clear input ownership and keyboard anchor.
+- Sidebar navigation separates handoff, connection, display experiments and access.
+- Redesigned menu-bar popover with matching destination cards.
+- Appearance-aware foreground accents improve light/dark contrast without
+  lightening the filled cards behind white text.
+- Mux accompanies the new settings workspace. Input transport is unchanged.
+
 ## 0.1.1 — Menu-bar visibility
 
 - Supply the Mux mark as a native template image instead of a bare SwiftUI

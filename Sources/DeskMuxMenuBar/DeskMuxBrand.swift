@@ -18,6 +18,13 @@ enum DeskMuxBrand {
   }()
 
   static let teal = Color(red: 0.17, green: 0.48, blue: 0.46)
+  // Foreground accents need a separate, appearance-aware color from filled
+  // surfaces: the dark brand teal is intentionally retained behind white text.
+  static let accent = Color(nsColor: NSColor(name: "DeskMuxAccent") { appearance in
+    appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+      ? NSColor(srgbRed: 0.54, green: 0.88, blue: 0.81, alpha: 1)
+      : NSColor(srgbRed: 0.08, green: 0.36, blue: 0.33, alpha: 1)
+  })
   static let coral = Color(red: 0.90, green: 0.42, blue: 0.28)
 }
 
@@ -47,7 +54,7 @@ struct MuxMark: Shape {
 struct DeskMuxBrandHeader: View {
   var body: some View {
     HStack(spacing: 12) {
-      MuxMark().fill(DeskMuxBrand.teal, style: FillStyle(eoFill: true))
+      MuxMark().fill(DeskMuxBrand.accent, style: FillStyle(eoFill: true))
         .frame(width: 33, height: 33)
         .padding(10)
         .background(DeskMuxBrand.teal.opacity(0.10), in: RoundedRectangle(cornerRadius: 15))
@@ -58,7 +65,7 @@ struct DeskMuxBrandHeader: View {
       Spacer()
       Link("DION LABS ↗", destination: URL(string: "https://deskmux.dionlabs.ai")!)
         .font(.system(size: 10, weight: .semibold, design: .monospaced))
-        .foregroundStyle(DeskMuxBrand.teal)
+        .foregroundStyle(DeskMuxBrand.accent)
     }
   }
 }

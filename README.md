@@ -31,7 +31,7 @@ Different Apple Accounts work. No cloud account or subscription is needed.
 
 ## Before you download
 
-This is **v0.1.1, a public preview**. Daily use has been validated with a
+This is **v0.2.0, a public preview**. Daily use has been validated with a
 Mac Studio M1 Ultra, MacBook Pro M1 Pro and Logitech MX Master 4 (Bolt on the
 desktop, Bluetooth on the laptop), on macOS 26.5.2. The deployment target is
 macOS 14+, but older versions and other HID++ mice need testing. The download
