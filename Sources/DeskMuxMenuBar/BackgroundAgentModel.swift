@@ -683,7 +683,7 @@ final class BackgroundAgentModel: ObservableObject {
       do {
         try monitor.run()
       } catch {
-        Task { @MainActor in
+        Task { @MainActor [weak self, monitor] in
           guard let self, self.edgeMonitor === monitor else { return }
           self.edgeSwitchMessage = String(describing: error)
           self.activeEdgeConfiguration = nil
