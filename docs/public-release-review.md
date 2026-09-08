@@ -10,12 +10,23 @@ release preparation.
 
 Publication checklist:
 
-- [ ] Public README and support/security documentation.
-- [ ] Original brand assets and app identity.
-- [ ] Source privacy scan, tests and signed package validation.
-- [ ] GitHub repository, CI and v0.1.0 preview artifacts.
-- [ ] Independent showcase repository and Cloudflare Git deployment.
-- [ ] Live Dion Labs portfolio integration.
+- [x] Public README, MIT license, attribution and support/security documentation.
+- [x] Original Mux mascot, app icon, menu-bar mark and settings header.
+- [x] Gitleaks history scan clean; 96 local tests; strict signature and ZIP checks.
+- [x] Public GitHub repository, passing macOS CI and v0.1.0 preview artifacts.
+- [x] Independent showcase repository and successful Git-triggered Cloudflare deployment.
+- [x] Live Dion Labs portfolio integration; desktop/mobile browser checks.
+
+Published on 2026-09-08:
+
+- App: https://github.com/dion-labs/deskmux
+- Release: https://github.com/dion-labs/deskmux/releases/tag/v0.1.0
+- Showcase: https://deskmux.dionlabs.ai
+- Site source: https://github.com/dion-labs/deskmux-site
+
+The showcase builds through Cloudflare Pages on site-repository pushes only.
+A small custom-domain Worker proxies its Pages origin. Portfolio changes deploy
+through the existing independent Dion Labs Workers Build.
 
 The preview is limited to Apple silicon. Only an Apple Development signing
 identity is currently available locally; notarization is not claimed. No
