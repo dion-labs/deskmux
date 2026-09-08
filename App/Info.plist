@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleDevelopmentRegion</key>
+  <string>en</string>
+  <key>CFBundleDisplayName</key>
+  <string>DeskMux</string>
+  <key>CFBundleExecutable</key>
+  <string>DeskMux</string>
+  <key>CFBundleIdentifier</key>
+  <string>dev.deskmux.app</string>
+  <key>CFBundleInfoDictionaryVersion</key>
+  <string>6.0</string>
+  <key>CFBundleName</key>
+  <string>DeskMux</string>
+  <key>CFBundleIconFile</key>
+  <string>DeskMux</string>
+  <key>CFBundlePackageType</key>
+  <string>APPL</string>
+  <key>CFBundleShortVersionString</key>
+  <string>0.1.0</string>
+  <key>CFBundleVersion</key>
+  <string>1</string>
+  <key>LSMinimumSystemVersion</key>
+  <string>14.0</string>
+  <key>LSUIElement</key>
+  <true/>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_deskmux._tcp</string>
+		<string>_deskmux-input._tcp</string>
+		<string>_deskmux-screen._tcp</string>
+	</array>
+  <key>NSInputMonitoringUsageDescription</key>
+  <string>DeskMux reads keyboard and mouse events on the active source Mac so it can route them to your other Mac.</string>
+  <key>NSLocalNetworkUsageDescription</key>
+  <string>DeskMux discovers and connects to your other Macs on the local network.</string>
+  <key>NSScreenCaptureUsageDescription</key>
+  <string>DeskMux displays a virtual monitor from your other Mac in an interactive window.</string>
+  <key>NSPrincipalClass</key>
+  <string>NSApplication</string>
+</dict>
+</plist>

@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleDevelopmentRegion</key>
+  <string>en</string>
+  <key>CFBundleDisplayName</key>
+  <string>DeskMux Agent</string>
+  <key>CFBundleExecutable</key>
+  <string>DeskMuxService</string>
+  <key>CFBundleIdentifier</key>
+  <string>dev.deskmux.agent</string>
+  <key>CFBundleInfoDictionaryVersion</key>
+  <string>6.0</string>
+  <key>CFBundleName</key>
+  <string>DeskMux Agent</string>
+  <key>CFBundlePackageType</key>
+  <string>APPL</string>
+  <key>CFBundleShortVersionString</key>
+  <string>0.1.0</string>
+  <key>CFBundleVersion</key>
+  <string>1</string>
+  <key>LSMinimumSystemVersion</key>
+  <string>14.0</string>
+  <key>LSUIElement</key>
+  <true/>
+  <key>NSBonjourServices</key>
+  <array>
+    <string>_deskmux-input._tcp</string>
+    <string>_deskmux-screen._tcp</string>
+  </array>
+  <key>NSInputMonitoringUsageDescription</key>
+  <string>DeskMux Agent reads keyboard and mouse events so it can route them between your Macs.</string>
+  <key>NSLocalNetworkUsageDescription</key>
+  <string>DeskMux Agent receives encrypted keyboard and mouse input from your paired Mac.</string>
+  <key>NSScreenCaptureUsageDescription</key>
+  <string>DeskMux Agent captures a virtual display so it can stream it to your paired Mac.</string>
+</dict>
+</plist>

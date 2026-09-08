@@ -1,0 +1,48 @@
+import SwiftUI
+
+enum DeskMuxBrand {
+  static let teal = Color(red: 0.17, green: 0.48, blue: 0.46)
+  static let coral = Color(red: 0.90, green: 0.42, blue: 0.28)
+}
+
+/// Mux's ear silhouette forms an M; the two eyes echo the paired Macs.
+struct MuxMark: Shape {
+  func path(in rect: CGRect) -> Path {
+    var path = Path()
+    let points: [CGPoint] = [
+      .init(x: 0.10, y: 0.08), .init(x: 0.35, y: 0.30),
+      .init(x: 0.65, y: 0.30), .init(x: 0.90, y: 0.08),
+      .init(x: 0.93, y: 0.64), .init(x: 0.70, y: 0.89),
+      .init(x: 0.50, y: 0.98), .init(x: 0.30, y: 0.89),
+      .init(x: 0.07, y: 0.64),
+    ]
+    path.addLines(points.map { .init(x: rect.minX + $0.x * rect.width,
+                                    y: rect.minY + $0.y * rect.height) })
+    path.closeSubpath()
+    for x in [0.25, 0.60] {
+      path.addRoundedRect(in: CGRect(x: rect.minX + x * rect.width,
+        y: rect.minY + 0.52 * rect.height, width: rect.width * 0.15,
+        height: rect.height * 0.10), cornerSize: CGSize(width: 1, height: 1))
+    }
+    return path
+  }
+}
+
+struct DeskMuxBrandHeader: View {
+  var body: some View {
+    HStack(spacing: 12) {
+      MuxMark().fill(DeskMuxBrand.teal, style: FillStyle(eoFill: true))
+        .frame(width: 33, height: 33)
+        .padding(10)
+        .background(DeskMuxBrand.teal.opacity(0.10), in: RoundedRectangle(cornerRadius: 15))
+      VStack(alignment: .leading, spacing: 3) {
+        Text("DeskMux").font(.system(size: 22, weight: .semibold, design: .rounded))
+        Text("Two Macs. One flow.").font(.callout).foregroundStyle(.secondary)
+      }
+      Spacer()
+      Link("DION LABS ↗", destination: URL(string: "https://deskmux.dionlabs.ai")!)
+        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+        .foregroundStyle(DeskMuxBrand.teal)
+    }
+  }
+}

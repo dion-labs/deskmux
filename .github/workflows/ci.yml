@@ -1,0 +1,15 @@
+name: macOS validation
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - run: swift --version
+      - run: swift test
+      - run: Scripts/build-app.sh
+        env:
+          DESKMUX_SIGNING_IDENTITY: '-'
+      - run: codesign --verify --deep --strict .build/DeskMux.app

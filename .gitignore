@@ -1,0 +1,13 @@
+.build/
+.swiftpm/
+DerivedData/
+Tools/SigningBootstrap/build/
+.DS_Store
+dist/
+.env
+.env.*
+*.p12
+*.mobileprovision
+*.key
+:-
+Tools/SigningBootstrap/
