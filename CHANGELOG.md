@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.1 — Menu-bar visibility
+
+- Supply the Mux mark as a native template image instead of a bare SwiftUI
+  shape, so the menu-bar status item has an image to display.
+- Add a rasterization check for a non-empty, appearance-adaptive status icon.
+
 ## 0.1.0 — First public preview
 
 - Native Logitech mouse handoff with configurable edge and modifier trigger.

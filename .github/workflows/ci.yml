@@ -12,6 +12,9 @@ jobs:
           xcode-version: latest-stable
       - run: swift --version
       - run: swift test
+      - run: |
+          swiftc Sources/DeskMuxMenuBar/DeskMuxBrand.swift Scripts/check-menu-bar-icon.swift -o .build/check-menu-bar-icon
+          .build/check-menu-bar-icon
       - run: Scripts/build-app.sh
         env:
           DESKMUX_SIGNING_IDENTITY: '-'

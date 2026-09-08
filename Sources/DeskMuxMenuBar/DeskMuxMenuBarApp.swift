@@ -122,8 +122,7 @@ private struct DeskMuxMenuBarStatusIcon: View {
 
   var body: some View {
     ZStack(alignment: .bottomTrailing) {
-      MuxMark()
-        .fill(.primary, style: FillStyle(eoFill: true))
+      Image(nsImage: DeskMuxBrand.menuBarMark)
         .frame(width: 20, height: 19)
         .opacity(inputIsLocal ? 1 : 0.7)
       Circle()

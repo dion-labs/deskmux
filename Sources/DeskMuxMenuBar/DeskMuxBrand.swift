@@ -1,6 +1,22 @@
 import SwiftUI
 
 enum DeskMuxBrand {
+  // MenuBarExtra extracts an NSImage for its status item. A bare SwiftUI Shape
+  // can render inside windows but leave that status-item image empty.
+  static let menuBarMark: NSImage = {
+    let size = NSSize(width: 20, height: 19)
+    let image = NSImage(size: size, flipped: true) { rect in
+      guard let context = NSGraphicsContext.current?.cgContext else { return false }
+      context.setFillColor(NSColor.black.cgColor)
+      context.addPath(MuxMark().path(in: rect).cgPath)
+      context.drawPath(using: .eoFill)
+      return true
+    }
+    image.isTemplate = true
+    image.accessibilityDescription = "DeskMux"
+    return image
+  }()
+
   static let teal = Color(red: 0.17, green: 0.48, blue: 0.46)
   static let coral = Color(red: 0.90, green: 0.42, blue: 0.28)
 }
