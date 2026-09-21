@@ -14,6 +14,7 @@ struct DeskMuxMenuBarApp: App {
   @StateObject private var backgroundAgent: BackgroundAgentModel
   @StateObject private var screenViewer: ScreenViewerModel
   @StateObject private var launchAtLogin: LaunchAtLoginModel
+  @StateObject private var physicalMonitor: PhysicalMonitorModel
 
   init() {
     let permissions = PermissionModel()
@@ -34,6 +35,9 @@ struct DeskMuxMenuBarApp: App {
     _backgroundAgent = StateObject(wrappedValue: backgroundAgent)
     _screenViewer = StateObject(wrappedValue: screenViewer)
     _launchAtLogin = StateObject(wrappedValue: LaunchAtLoginModel())
+    let physicalMonitor = PhysicalMonitorModel(localPeerID: inputRelay.localPeerID.rawValue)
+    physicalMonitor.observe(backgroundAgent)
+    _physicalMonitor = StateObject(wrappedValue: physicalMonitor)
   }
 
   var body: some Scene {
@@ -52,13 +56,14 @@ struct DeskMuxMenuBarApp: App {
     }
     .menuBarExtraStyle(.window)
 
-    Settings {
+    Window("Your desk", id: "your-desk") {
       DeskMuxSettingsWindow(
         permissions: permissions,
         inputRelay: inputRelay,
         backgroundAgent: backgroundAgent,
         screenViewer: screenViewer,
-        launchAtLogin: launchAtLogin
+        launchAtLogin: launchAtLogin,
+        physicalMonitor: physicalMonitor
       )
     }
 
@@ -142,7 +147,7 @@ private struct DeskMuxCompactPanel: View {
   @ObservedObject var permissions: PermissionModel
   @ObservedObject var inputRelay: InputRelayModel
   @ObservedObject var backgroundAgent: BackgroundAgentModel
-  @Environment(\.openSettings) private var openSettings
+  @Environment(\.openWindow) private var openWindow
 
   private var connected: Bool {
     peerIsConnected(inputRelay: inputRelay, backgroundAgent: backgroundAgent)
@@ -249,7 +254,18 @@ private struct DeskMuxCompactPanel: View {
       HStack {
         Button("Your desk…", systemImage: "rectangle.2.swap") {
           NSApplication.shared.activate(ignoringOtherApps: true)
-          openSettings()
+          let menuScreen = NSScreen.screens.first { $0.frame.contains(NSEvent.mouseLocation) }
+          openWindow(id: "your-desk")
+          DispatchQueue.main.async {
+            guard let window = NSApplication.shared.windows.first(where: { $0.identifier?.rawValue == "your-desk" || $0.title == "Your desk" }) else { return }
+            if let frame = menuScreen?.visibleFrame {
+              window.setFrameOrigin(NSPoint(
+                x: frame.midX - window.frame.width / 2,
+                y: frame.midY - window.frame.height / 2))
+            }
+            window.makeKeyAndOrderFront(nil)
+            NSApplication.shared.activate(ignoringOtherApps: true)
+          }
         }
         Spacer()
         Button("Quit") {
@@ -292,6 +308,7 @@ private struct DeskMuxSettingsWindow: View {
   @ObservedObject var backgroundAgent: BackgroundAgentModel
   @ObservedObject var screenViewer: ScreenViewerModel
   @ObservedObject var launchAtLogin: LaunchAtLoginModel
+  @ObservedObject var physicalMonitor: PhysicalMonitorModel
   @State private var selection = "Your desk"
 
   var body: some View {
@@ -349,7 +366,7 @@ private struct DeskMuxSettingsWindow: View {
         launchAtLogin: launchAtLogin
       )
         case "Connection": ConnectionSettingsPage(inputRelay: inputRelay, backgroundAgent: backgroundAgent)
-        case "Displays": DisplaySettingsPage(model: screenViewer, backgroundAgent: backgroundAgent)
+        case "Displays": DisplaySettingsPage(model: screenViewer, backgroundAgent: backgroundAgent, physicalMonitor: physicalMonitor)
         default: PermissionsSettingsPage(permissions: permissions, backgroundAgent: backgroundAgent)
         }
         }
@@ -390,10 +407,14 @@ private struct DeskMuxSettingsWindow: View {
 private struct DisplaySettingsPage: View {
   @ObservedObject var model: ScreenViewerModel
   @ObservedObject var backgroundAgent: BackgroundAgentModel
+  @ObservedObject var physicalMonitor: PhysicalMonitorModel
   @Environment(\.openWindow) private var openWindow
 
   var body: some View {
+    ScrollView {
     VStack(alignment: .leading, spacing: 18) {
+      PhysicalMonitorCard(model: physicalMonitor)
+      Divider()
       SettingsPageHeader(
         title: "Virtual displays",
         subtitle: "Open an additional display rendered by your paired Mac."
@@ -462,6 +483,7 @@ private struct DisplaySettingsPage: View {
       Spacer()
     }
     .padding(.vertical, 4)
+    }
   }
 }
 

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.1 — Desk window and local monitor discovery
+
+- Open Your desk as an explicit window from the menu bar.
+- Resolve the experimental AOC video controls on each Mac independently.
+- Show local monitor identity and helper errors when DDC control fails.
+- Include opt-in AOC input following and visible-screen window placement.
+- MacBook HDMI switching still requires physical validation.
+
 ## 0.2.0 — Your desk, redesigned
 
 - A two-Mac dashboard with clear input ownership and keyboard anchor.

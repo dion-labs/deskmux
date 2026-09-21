@@ -1,9 +1,6 @@
-# Third-party acknowledgements
+MIT License
 
-DeskMux's virtual-display investigation references the object graph and private
-selectors documented by [DeskPad](https://github.com/Stengo/DeskPad).
-
-DeskPad — Copyright © 2022 Bastian Andelefski — MIT License
+Copyright (c) 2021 waydabber
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -22,13 +19,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
-Logitech, Logi Bolt, Apple and macOS are trademarks of their respective owners.
-DeskMux is an independent project and is not affiliated with those companies.
-Research references are documented in `docs/`; vendor firmware and binaries
-are not distributed with this project.
-# m1ddc
-
-The local physical-monitor experiment includes m1ddc by waydabber (MIT).
-The complete license is included at `Vendor/m1ddc/LICENSE`; source revision
-and provenance are documented in `Vendor/m1ddc/README.md`.

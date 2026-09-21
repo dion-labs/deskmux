@@ -20,10 +20,12 @@ if [[ -d "$app_bundle" ]]; then
   mv "$app_bundle" "$project_root/.build/DeskMux-prebuild-$(date -u +%Y%m%d%H%M%S).retired"
 fi
 mkdir -p "$macos_dir" "$helpers_dir" "$launch_agents_dir" "$agent_macos_dir"
+clang -fmodules -I Vendor/m1ddc/headers Vendor/m1ddc/sources/*.m -framework CoreDisplay -o "$helpers_dir/deskmux-ddc"
 cp "$project_root/.build/$build_configuration/DeskMux" "$macos_dir/DeskMux"
 cp "$project_root/.build/$build_configuration/DeskMuxRelauncher" "$helpers_dir/DeskMuxRelauncher"
 cp "$project_root/.build/$build_configuration/DeskMuxService" "$agent_macos_dir/DeskMuxService"
 mkdir -p "$contents/Resources"
+cp "$project_root/Vendor/m1ddc/LICENSE" "$contents/Resources/m1ddc-LICENSE.txt"
 cp "$project_root/App/Resources/DeskMux.icns" "$contents/Resources/DeskMux.icns"
 cp "$project_root/docs/brand/mux.png" "$contents/Resources/Mux.png"
 cp "$project_root/App/Agent-Info.plist" "$agent_contents/Info.plist"
@@ -67,6 +69,7 @@ if [[ -z "$signing_identity" ]]; then
 fi
 
 if [[ -n "$signing_identity" ]]; then
+  codesign --force --options runtime --sign "$signing_identity" "$helpers_dir/deskmux-ddc"
   codesign --force --options runtime --sign "$signing_identity" \
     --identifier dev.deskmux.relauncher "$helpers_dir/DeskMuxRelauncher"
   codesign --force --options runtime --sign "$signing_identity" \
@@ -75,6 +78,7 @@ if [[ -n "$signing_identity" ]]; then
     --identifier dev.deskmux.app "$app_bundle"
   echo "Signed with a stable ${signing_identity%%:*} identity." >&2
 else
+  codesign --force --sign - --identifier dev.deskmux.ddc "$helpers_dir/deskmux-ddc"
   codesign --force --sign - --identifier dev.deskmux.relauncher \
     "$helpers_dir/DeskMuxRelauncher"
   codesign --force --sign - --identifier dev.deskmux.agent "$agent_bundle"
