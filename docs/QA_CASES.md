@@ -2,7 +2,7 @@
 
 Stable IDs extend the original burn register; never renumber when adding cases. Scope comes from README.md, docs/development.md and the current source. No separate vision or journal existed at intake; TOKEN_BURN_2026-09-22.md is the checkpoint journal.
 
-Status: **A** means automated evidence from 2026-09-22: baseline e9e6ac0 (103 tests), v0.2.2 (111 tests), expanded v0.2.3 release tree (114 tests); **P** means partial automation with manual acceptance still NOT RUN; **M** means manual NOT RUN. Names below resolve under Tests/; a unit test proves only its stated boundary. Priority P0 covers input safety/authentication/install integrity; P1 covers recovery/privacy/routing; P2 covers presentation/experimental features. Run synthetic fixtures only. Never activate hardware probes or replace/restart live apps as part of baseline.
+Status: **A** means automated evidence from 2026-09-22: baseline e9e6ac0 (103 tests), v0.2.2 (111 tests), expanded v0.2.3/v0.2.4 (114 tests); **P** means partial automation with manual acceptance still NOT RUN; **M** means manual NOT RUN. Names below resolve under Tests/; a unit test proves only its stated boundary. Priority P0 covers input safety/authentication/install integrity; P1 covers recovery/privacy/routing; P2 covers presentation/experimental features. Run synthetic fixtures only. Never activate hardware probes or replace/restart live apps as part of baseline.
 
 | ID | Priority / class | Procedure and expected outcome | Automated mapping / remaining manual gate | Status |
 |---|---|---|---|---|
@@ -43,6 +43,7 @@ Status: **A** means automated evidence from 2026-09-22: baseline e9e6ac0 (103 te
 | DM-035 | P2 platform | Negative display origins and corners; cue stays visible and internal monitor boundaries do not hand off | CursorHandoffFeedbackTests and MacPointerEdgeMonitorTests negativeDisplayOrigin/outermostMonitorBoundary/cornersDoNotTrigger | A |
 | DM-036 | P1 privacy/recovery | Copy text then unsupported/oversized content; reconnect must not replay old observed text; remote application suppresses echo and new local text recovers | ClipboardObservationTests synthetic generation state; live two-Mac pasteboard and reconnect still manual | P |
 | DM-037 | P1 privacy/recovery | Pause reconnect replay, observe unsupported/oversized or remote replacement, then resume; no old callback fires, next eligible text still delivers, removal stops future delivery | ClipboardObservationTests queued-replay and serial-removal tests exercise production delivery scheduler with synthetic closures; no pasteboard access | A |
+| DM-038 | P1 platform | Compile, test, icon-smoke, package and verify signature using CI Swift 6.2.4/macOS 15 as well as local Swift 6.3.2; actor isolation must compile on both | GitHub run 35697374677 passed on Swift 6.2.4; local Swift 6.3.2 suite/package passed. v0.2.3 failed the weak-capture check; v0.2.4 corrects it | A |
 
 ## Reproduction and acceptance receipt
 
