@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.3 — Clipboard replay ordering
+
+- Serialize reconnect replay with clipboard observation and remote application.
+  A queued reconnect now checks the current text at delivery instead of carrying
+  an old snapshot past a clipboard invalidation.
+- Add deterministic paused-replay tests for unsupported/oversized replacements,
+  remote application, valid replay, subsequent text and observer removal.
+
 ## 0.2.2 — Clipboard reconnect privacy
 
 - Discard cached outgoing text when a new clipboard generation is observed,

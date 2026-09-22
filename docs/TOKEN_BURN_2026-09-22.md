@@ -59,3 +59,23 @@ Scope correction supersedes checkpoint 2: DeskMux streaming remains in scope. Al
 ## Checkpoint 5 — release artifact validated
 
 `resource-run.py -- Scripts/release.sh` exited 0 (/tmp/deskmux-burn-release.log). Release ZIP: `dist/DeskMux-0.2.2-macOS-arm64.zip`, 5,206,410 bytes; SHA-256 `f5e7555c9b68b1f413daee4a931f164a252c7b87b9e9c21856d52a241464d877` matches dist/SHA256SUMS.txt. `unzip -tq` passed. Extracted into a fresh temporary directory, `codesign --verify --deep --strict` passed; both app/agent report 0.2.2 / build 20260922065006; lipo confirms arm64; DDC/relauncher/Mux/license resources present. Stable Apple Development signature, not notarized. Temporary extraction removed automatically; preexisting output/ remains untouched. Source diff reviewed; no unrelated staged files. Publication next within root-assigned slot.
+
+## Checkpoint 6 — published release and resume state
+
+Committed release source/tests/docs as `aab61ae4cd0c7a2dcd711d2430c59d2316d1d2e8`; pushed main and annotated v0.2.2. Published prerelease https://github.com/dion-labs/deskmux/releases/tag/v0.2.2 at 2026-09-22T06:51:01Z. Both ZIP and SHA256SUMS uploaded. Downloaded both published assets into a fresh temporary directory and independently verified digest matches the validated local ZIP. Site worker received exact validated links/change summary; awaiting local-site validation confirmation (deployment remains unauthorized). Git worktree after release contains only preexisting untracked output/ before this journal update.
+
+GitHub macOS CI for release head was in progress at this checkpoint (runs 35696700732 and 35696700349); local tests/package checks already passed. No new physical/manual acceptance claimed. Next: check CI and site worker receipt, record final outcome, then continue only concrete scope-backed work or coordinated acceptance; do not restart apps/hardware to clear remaining gates.
+
+## Checkpoint 7 — reviewer-directed replay ordering follow-up
+
+Root review of released aab61ae found that addObserver captured pending text under lock and invoked its callback after unlocking; a main-thread invalidation could occur between snapshot and callback. The 0.2.2 observation tests did not cover delivery ordering. Implemented a MainActor-isolated DeskMuxClipboardDelivery used by the bridge: queued registration/replay obtains current pending state at execution, and observations, remote application and callbacks all execute serially on main. No snapshot crosses an observed invalidation. Added injected paused-scheduler tests with no NSPasteboard calls for unsupported/oversized/remote invalidation, valid replay, subsequent local text and observer removal. Preparing a separate v0.2.3 release per root; existing 0.2.2 artifacts remain unchanged. Targeted tests in /tmp/deskmux-burn-replay-tests.log.
+
+## Checkpoint 8 — v0.2.3 release candidate
+
+Seven targeted clipboard tests passed (/tmp/deskmux-burn-replay-tests.log), then full `resource-run.py -- swift test --scratch-path .build/public-preview` passed **114 tests in 3 suites** (/tmp/deskmux-burn-v023-tests.log), exit 0. Registry now DM-001–DM-037. Root granted exclusive next patch publication slot. v0.2.3 app/agent/README/CHANGELOG prepared; resource-wrapped release build running (/tmp/deskmux-burn-v023-release.log). Site worker independently confirmed v0.2.2 links, checksum, browser QA and no deployment; final v0.2.3 notification will supersede those links.
+
+The follow-up regression tests exercise the production delivery component using an injected paused work queue, not merely the observation value type. Observed invalidation happens before replay resumes, and no stale callback is emitted; valid current replay, later text and observer removal are checked. Real pasteboard timing, running app behavior and physical acceptance remain deferred as listed above. Root reviewer may inspect the dirty release diff before publication.
+
+## Checkpoint 9 — v0.2.3 artifact accepted
+
+Release build exited 0. ZIP `DeskMux-0.2.3-macOS-arm64.zip` is 5,210,972 bytes; SHA256 `dae82e8701818881d096f7a17bf6598fa92da4e1d3b4d99b71b2cb1d6f2fed1b`. Fresh temp extraction: unzip integrity and strict deep codesign pass; app/agent 0.2.3 build 20260922065630; arm64 binary. Both app and agent designated requirements exactly match extracted v0.2.2 equivalents. This is signature evidence, not live TCC/upgrade acceptance. Diff reviewed, git diff --check clean. Publication next under root-authorized follow-up slot.

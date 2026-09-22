@@ -57,3 +57,89 @@ import Testing
   let changed11 = observation.observe(changeCount: 4)
   #expect(changed11 == true)
 }
+
+// DM-037: pause the production delivery scheduler, invalidate, then resume replay.
+@Test @MainActor func clipboardQueuedReplayUsesCurrentGenerationAtDelivery() {
+  let queue = PausedClipboardDeliveryQueue()
+  let delivery = DeskMuxClipboardDelivery(enqueue: { queue.append($0) })
+  let recorder = ClipboardDeliveryRecorder()
+  let peer = PeerID(rawValue: "fixture")
+  delivery.addObserver(id: UUID(), localPeerID: peer, handler: { _ in })
+  queue.drain()
+  delivery.observe(changeCount: 1) { "initial must stay local" }
+  delivery.observe(changeCount: 2) { "old synthetic text" }
+  delivery.addObserver(id: UUID(), localPeerID: peer, handler: { recorder.append($0.text) })
+  #expect(recorder.texts.isEmpty)
+  delivery.observe(changeCount: 3) { nil } // image/file/cleared clipboard while replay paused
+  queue.drain()
+  #expect(recorder.texts.isEmpty)
+  delivery.observe(changeCount: 4) { "new synthetic text" }
+  #expect(recorder.texts == ["new synthetic text"])
+}
+
+@Test @MainActor func clipboardQueuedReplayCannotOutliveOversizeOrRemoteInvalidation() {
+  for remote in [false, true] {
+    let queue = PausedClipboardDeliveryQueue()
+    let delivery = DeskMuxClipboardDelivery(enqueue: { queue.append($0) })
+    let recorder = ClipboardDeliveryRecorder()
+    let peer = PeerID(rawValue: "fixture")
+    delivery.addObserver(id: UUID(), localPeerID: peer, handler: { _ in })
+    queue.drain()
+    delivery.observe(changeCount: 1) { nil }
+    delivery.observe(changeCount: 2) { "old synthetic text" }
+    delivery.addObserver(id: UUID(), localPeerID: peer, handler: { recorder.append($0.text) })
+    if remote {
+      delivery.appliedRemote(changeCount: 3)
+    } else {
+      delivery.observe(changeCount: 3) {
+        String(repeating: "é", count: DeskMuxClipboardUpdate.maximumUTF8Size / 2 + 1)
+      }
+    }
+    queue.drain()
+    #expect(recorder.texts.isEmpty)
+  }
+}
+
+@Test @MainActor func clipboardReplayAndRemovalPreserveSerialOrdering() {
+  let queue = PausedClipboardDeliveryQueue()
+  let delivery = DeskMuxClipboardDelivery(enqueue: { queue.append($0) })
+  let recorder = ClipboardDeliveryRecorder()
+  let peer = PeerID(rawValue: "fixture")
+  let observer = UUID()
+  delivery.addObserver(id: UUID(), localPeerID: peer, handler: { _ in })
+  queue.drain()
+  delivery.observe(changeCount: 1) { nil }
+  delivery.observe(changeCount: 2) { "current synthetic text" }
+  delivery.addObserver(id: observer, localPeerID: peer, handler: { recorder.append($0.text) })
+  queue.drain()
+  #expect(recorder.texts == ["current synthetic text"])
+  delivery.removeObserver(id: observer)
+  queue.drain()
+  delivery.observe(changeCount: 3) { "later synthetic text" }
+  #expect(recorder.texts == ["current synthetic text"])
+}
+
+private final class PausedClipboardDeliveryQueue: @unchecked Sendable {
+  private let lock = NSLock()
+  private var work: [DeskMuxClipboardDelivery.Work] = []
+
+  func append(_ action: @escaping DeskMuxClipboardDelivery.Work) {
+    lock.withLock { work.append(action) }
+  }
+
+  @MainActor func drain() {
+    let pending = lock.withLock {
+      let pending = work
+      work.removeAll()
+      return pending
+    }
+    for action in pending { action() }
+  }
+}
+
+private final class ClipboardDeliveryRecorder: @unchecked Sendable {
+  private let lock = NSLock()
+  private var values: [String] = []
+  var texts: [String] { lock.withLock { values } }
+  func append(_ text: String) { lock.withLock { values.append(text) } }
+}

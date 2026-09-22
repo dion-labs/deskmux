@@ -26,6 +26,54 @@ struct DeskMuxClipboardObservation {
   }
 }
 
+/// All generation changes and deliveries execute on the main actor. In particular,
+/// reconnect replay reads the current pending value only when its queued work runs;
+/// it never carries a snapshot across an observed invalidation.
+@MainActor
+final class DeskMuxClipboardDelivery {
+  typealias UpdateHandler = @Sendable (DeskMuxClipboardUpdate) -> Void
+  typealias Work = @MainActor @Sendable () -> Void
+  typealias Enqueue = @Sendable (@escaping Work) -> Void
+
+  private nonisolated let enqueue: Enqueue
+  private var observers: [UUID: UpdateHandler] = [:]
+  private var localPeerID: PeerID?
+  private var observation = DeskMuxClipboardObservation()
+
+  nonisolated init(enqueue: @escaping Enqueue = { work in
+    DispatchQueue.main.async { work() }
+  }) {
+    self.enqueue = enqueue
+  }
+
+  nonisolated func addObserver(id: UUID, localPeerID: PeerID, handler: @escaping UpdateHandler) {
+    enqueue { [weak self] in
+      guard let self else { return }
+      self.localPeerID = localPeerID
+      self.observers[id] = handler
+      if let pending = self.observation.pendingLocalUpdate { handler(pending) }
+    }
+  }
+
+  nonisolated func removeObserver(id: UUID) {
+    enqueue { [weak self] in self?.observers.removeValue(forKey: id) }
+  }
+
+  func observe(changeCount: Int, readText: () -> String?) {
+    guard observation.observe(changeCount: changeCount),
+      let localPeerID, let text = readText()
+    else { return }
+    let update = DeskMuxClipboardUpdate(sourcePeerID: localPeerID, text: text)
+    observation.recordLocal(update)
+    guard update.isWithinSizeLimit else { return }
+    for handler in observers.values { handler(update) }
+  }
+
+  func appliedRemote(changeCount: Int) {
+    observation.appliedRemote(changeCount: changeCount)
+  }
+}
+
 /// Process-wide plain-text clipboard synchronization for DeskMux's stable,
 /// encrypted peer connection. Remote writes advance the observed pasteboard
 /// generation before polling can echo them back to their source.
@@ -35,9 +83,7 @@ final class DeskMuxClipboardBridge: @unchecked Sendable {
   typealias UpdateHandler = @Sendable (DeskMuxClipboardUpdate) -> Void
 
   private let lock = NSLock()
-  private var observers: [UUID: UpdateHandler] = [:]
-  private var localPeerID: PeerID?
-  private var observation = DeskMuxClipboardObservation()
+  private let delivery = DeskMuxClipboardDelivery()
   private var receivedUpdateIDs: [UUID] = []
   private var receivedUpdateIDSet: Set<UUID> = []
   private var timer: DispatchSourceTimer?
@@ -53,17 +99,12 @@ final class DeskMuxClipboardBridge: @unchecked Sendable {
     localPeerID: PeerID,
     handler: @escaping UpdateHandler
   ) {
-    let state = lock.withLock { () -> (Bool, DeskMuxClipboardUpdate?) in
-      self.localPeerID = localPeerID
-      observers[id] = handler
-      return (timer == nil, observation.pendingLocalUpdate)
-    }
-    if state.0 { startMonitoring() }
-    if let pending = state.1 { handler(pending) }
+    delivery.addObserver(id: id, localPeerID: localPeerID, handler: handler)
+    startMonitoring()
   }
 
   func removeObserver(id: UUID) {
-    _ = lock.withLock { observers.removeValue(forKey: id) }
+    delivery.removeObserver(id: id)
   }
 
   func applyRemote(
@@ -93,9 +134,7 @@ final class DeskMuxClipboardBridge: @unchecked Sendable {
       let pasteboard = NSPasteboard.general
       pasteboard.clearContents()
       pasteboard.setString(update.text, forType: .string)
-      lock.withLock {
-        observation.appliedRemote(changeCount: pasteboard.changeCount)
-      }
+      delivery.appliedRemote(changeCount: pasteboard.changeCount)
       record("applied", update: update)
       completion()
     }
@@ -116,7 +155,9 @@ final class DeskMuxClipboardBridge: @unchecked Sendable {
       repeating: .milliseconds(150),
       leeway: .milliseconds(30)
     )
-    timer.setEventHandler { [weak self] in self?.pollPasteboard() }
+    timer.setEventHandler { [weak self] in
+      MainActor.assumeIsolated { self?.pollPasteboard() }
+    }
     let adopted = lock.withLock { () -> Bool in
       guard self.timer == nil else { return false }
       self.timer = timer
@@ -130,24 +171,12 @@ final class DeskMuxClipboardBridge: @unchecked Sendable {
     }
   }
 
+  @MainActor
   private func pollPasteboard() {
     let pasteboard = NSPasteboard.general
-    let changeCount = pasteboard.changeCount
-    let peerID = lock.withLock { () -> PeerID? in
-      guard observation.observe(changeCount: changeCount) else { return nil }
-      return localPeerID
+    delivery.observe(changeCount: pasteboard.changeCount) {
+      pasteboard.string(forType: .string)
     }
-    guard let peerID,
-      let text = pasteboard.string(forType: .string)
-    else { return }
-
-    let update = DeskMuxClipboardUpdate(sourcePeerID: peerID, text: text)
-    guard update.isWithinSizeLimit else { return }
-    let handlers = lock.withLock { () -> [UpdateHandler] in
-      observation.recordLocal(update)
-      return Array(observers.values)
-    }
-    for handler in handlers { handler(update) }
   }
 
   private func record(_ event: String, update: DeskMuxClipboardUpdate) {
