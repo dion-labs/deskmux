@@ -222,3 +222,17 @@ Candidate fix uses atomic O_CREAT|O_APPEND open, flock per inode around one comb
 ## Checkpoint 29 — persisted append fix passes full and sanitizer acceptance
 
 FocusedruntimeLog6functions/12parametercases PASS (/tmp/deskmux-burn-runtime-log-fixed.log). Fullsuite **149 tests/3suites PASS** (/tmp/deskmux-burn-log-full-tests.log), targeted ThreadSanitizer **6functions/12cases PASS** without race reports (/tmp/deskmux-burn-log-tsan.log), all resource-wrapped. Both streams now retain all320records, everyrecord parses, and each producer's40records remain ordered. Externalrename/delete and errorrecovery continue passing. Registry55 IDs, DM-055 deliberatelypartial because freeformdiagnostic values remain storedverbatim. Native/live logflow privacy still not claimed. Final source ready for independent seam/append review and nextpatch slot; no versionbump/publication yet.
+
+## Checkpoint 30 — logging release candidate and exclusive slot
+
+Candidate committed/pushed as5ef71e30ccea42f3935dc164773b69d25c740ba9 with0.2.7 metadata. SupportedCI35705035091 in progress; resourcewrapped Scripts/release.sh queued /tmp/deskmux-burn-v027-release.log. Root reserves0.2.7 exclusively and assigned independentreview; publication waits reviewclear+CI+artifact. Full149/TSan6 receipts remain current, only metadata/docs/whitespace aftertests. Root agrees privacyDM055 stayspartial for caller-provided freeformdiagnostic strings; no new redactionpromise. .6 assets/site receipts unchanged.
+
+## Checkpoint 31 — review caught blocking diagnostics; reproduced before repair
+
+Root review HOLD correctly identified newblockingflock on MainActor handoff path. Independentactualwriter probe waited300ms under heldlock and returnedonlyafterunlock. Added owned Pythonprocess fixture for eachstream, holding onlytempfile lock and waitingonstdin; actualwriterfailed1second return deadline and wrote contendedrecord afterunlock, fourassertions across2variants (/tmp/deskmux-burn-log-heldlock-baseline.log). Childprocesses released/exited. No nativeapp/service/home log involved.
+
+Candidate repair: LOCK_EX|LOCK_NB drops a contended diagnostic record immediately, preserving existing best-effort/nonthrowing intent. Normalconcurrent fixture now checks persistedsubset is nonempty/whole/unique/per-producerordered, not losslessundercontention. Serialorder/recreation remains exact. Docs explicitly describe droppedcontention and no completeaudit guarantee. Prior149/6 and CI35705035091green belong to rejectedblockingcandidate5ef71e3, NOT finalfix. Its unpublisheddistarchive movedto dist/candidates/DeskMux-0.2.7-5ef71e3-blocking-lock.zip withchecksumreceipt; neverpublished. Finalfocused/full/TSan/CI/review/artifact must rerun for newbehavior. .6 remainsimmutable.
+
+## Checkpoint 32 — final nonblocking contention acceptance passes
+
+After minimalchildenvironment/Pythonisolatedmode fixture update: fullsuite **150 tests/3suites PASS** /tmp/deskmux-burn-v027-final-tests.log, targetedThreadSanitizer **7functions/14parametercases PASS** /tmp/deskmux-burn-v027-final-tsan.log, no sanitizer/data-race/error reports. Controlled separateprocess holds eachactualtemp loglock: callerreturns beforeunlock, recordskipped, subsequentappend succeeds. Normalconcurrentpersistedrecords remain whole/unique/ordered; contentionloss is explicitbest-effort behavior. No live service/home/native effects. Source frozen for finalCI/newartifact/review; earlier149/6/CI35705035091 evidence remains rejectedblockingcandidatehistory only.

@@ -4,6 +4,7 @@
 
 - Prevent concurrent network and handoff log writers from overwriting or
   interleaving JSONL records through atomic append and per-file serialization.
+  Skip records on lock contention so diagnostics cannot wait on a paused writer.
 - Isolate the existing writer behind an explicit directory dependency for
   disposable persistence, recreation, external rotation and error-recovery tests.
 - Preserve existing metadata fields and synchronous error handling. Diagnostic

@@ -117,7 +117,10 @@ warm channel state and its latest round-trip time. Connection lifecycle records
 are appended to `~/Library/Application Support/DeskMux/network.jsonl`.
 
 Network and handoff writers reopen their file for each synchronous append and
-serialize each complete JSONL record. If a log is externally renamed or removed,
+serialize each complete JSONL record. Lock acquisition is nonblocking: a record
+is dropped if another writer holds the log lock, so contention cannot stall a
+handoff. The next append retries; these diagnostics are best effort, not a
+complete audit trail. If a log is externally renamed or removed,
 the next append recreates its original path; DeskMux has no automatic rotation
 policy. Write failures are ignored and later appends retry. These logs contain
 peer identifiers and diagnostic detail/error strings verbatim: review them

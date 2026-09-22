@@ -44,11 +44,17 @@ private func runtimeLogConcurrentWritersPreserveWholeOrderedRecords(_ kind: Runt
     }
   }
   let rows = try runtimeLogRows(root.appendingPathComponent(kind.filename))
-  #expect(rows.count == 320)
+  // Contended diagnostic records may be dropped, but persisted records must
+  // remain complete, unique and in each synchronous producer's order.
+  #expect(!rows.isEmpty && rows.count <= 320)
+  #expect(Set(rows.compactMap { $0["event"] }).count == rows.count)
   #expect(rows.allSatisfy { $0["detail"] == detail })
   for producer in writers.indices {
     let events = rows.compactMap { $0["event"] }.filter { $0.hasPrefix("producer-\(producer)-") }
-    #expect(events == (0..<40).map { "producer-\(producer)-\($0)" })
+    let indices = events.compactMap { Int($0.split(separator: "-").last ?? "") }
+    #expect(indices.count == events.count)
+    #expect(indices == indices.sorted())
+    #expect(indices.allSatisfy { (0..<40).contains($0) })
   }
 }
 
@@ -135,3 +141,72 @@ private func runtimeLogRows(_ url: URL) throws -> [[String: String]] {
     try #require(JSONSerialization.jsonObject(with: Data($0)) as? [String: String])
   }
 }
+
+@Test(arguments: RuntimeLogKind.allCases)
+private func runtimeLogHeldProcessLockDoesNotDelayCallerAndRecovers(_ kind: RuntimeLogKind) throws {
+  let root = try runtimeLogDirectory()
+  defer { try? FileManager.default.removeItem(at: root) }
+  let writer = DeskMuxRuntimeEventLog(directory: root)
+  kind.record(writer, event: "before-lock")
+  let holder = try RuntimeLogLockHolder(url: root.appendingPathComponent(kind.filename))
+  defer { holder.release() }
+  let returned = DispatchSemaphore(value: 0)
+  DispatchQueue.global().async {
+    kind.record(writer, event: "contended-best-effort")
+    returned.signal()
+  }
+  let prompt = returned.wait(timeout: .now() + 1) == .success
+  holder.release()
+  #expect(prompt)
+  if !prompt { #expect(returned.wait(timeout: .now() + 5) == .success) }
+  kind.record(writer, event: "after-lock")
+  #expect(try runtimeLogRows(root.appendingPathComponent(kind.filename)).compactMap { $0["event"] }
+    == ["before-lock", "after-lock"])
+}
+
+// This owned fixture only holds a lock on one synthetic file and waits on stdin.
+// It never starts a DeskMux service or inherits any application configuration.
+private final class RuntimeLogLockHolder {
+  private let process = Process()
+  private let input = Pipe()
+  private let output = Pipe()
+
+  init(url: URL) throws {
+    let ready = DispatchSemaphore(value: 0)
+    process.executableURL = URL(fileURLWithPath: "/usr/bin/python3")
+    process.environment = ["PATH": "/usr/bin:/bin", "LANG": "en_US.UTF-8"]
+    process.arguments = ["-I", "-u", "-c", """
+      import fcntl, os, sys
+      fd = os.open(sys.argv[1], os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+      fcntl.flock(fd, fcntl.LOCK_EX)
+      print("LOCKED", flush=True)
+      sys.stdin.buffer.read(1)
+      os.close(fd)
+      """, url.path]
+    process.standardInput = input
+    process.standardOutput = output
+    output.fileHandleForReading.readabilityHandler = { handle in
+      if !handle.availableData.isEmpty { ready.signal() }
+    }
+    do {
+      try process.run()
+      guard ready.wait(timeout: .now() + 5) == .success else {
+        release()
+        throw RuntimeLogFixtureError.lockHolderDidNotStart
+      }
+      output.fileHandleForReading.readabilityHandler = nil
+    } catch {
+      output.fileHandleForReading.readabilityHandler = nil
+      throw error
+    }
+  }
+
+  func release() {
+    guard process.isRunning else { return }
+    try? input.fileHandleForWriting.write(contentsOf: Data([0x0a]))
+    try? input.fileHandleForWriting.close()
+    process.waitUntilExit()
+  }
+}
+
+private enum RuntimeLogFixtureError: Error { case lockHolderDidNotStart }
