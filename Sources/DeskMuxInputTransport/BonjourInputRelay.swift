@@ -1144,7 +1144,7 @@ public final class BonjourInputReceiver: @unchecked Sendable {
         nwConnection: nwConnection,
         sharedKey: sharedKey,
         acceptsAppUpdates: acceptsAppUpdates,
-        motionSessions: motionSessions,
+        dependencies: .production(motionSessions: motionSessions),
         motionPort: motionReceiver?.port?.rawValue,
         queue: queue,
         activityChanged: { [weak self] peerID in
@@ -1167,18 +1167,18 @@ public final class BonjourInputReceiver: @unchecked Sendable {
   }
 }
 
-private final class ReceiverSession: @unchecked Sendable {
+final class ReceiverSession: @unchecked Sendable {
   private let localPeerID: PeerID
   private let acceptsAppUpdates: Bool
   private let activityChanged: @Sendable (PeerID) -> Void
   private let ended: @Sendable (ObjectIdentifier) -> Void
-  private let motionSessions: MotionSessionRegistry
+  private let dependencies: ReceiverSessionDependencies
   private let motionPort: UInt16?
   private let lock = NSLock()
   private var remotePeerID: PeerID?
   private var sessionPurpose: PeerSessionPurpose?
-  private var injector: MacInputInjector?
-  private var localEscapeMonitor: MacLocalEscapeMonitor?
+  private var injector: (any ReceiverInputSink)?
+  private var localEscapeMonitor: (any ReceiverEscapeMonitor)?
   private var connection: InputPeerConnection!
   private var finished = false
   private var returnRequested = false
@@ -1188,7 +1188,7 @@ private final class ReceiverSession: @unchecked Sendable {
     nwConnection: NWConnection,
     sharedKey: String,
     acceptsAppUpdates: Bool,
-    motionSessions: MotionSessionRegistry,
+    dependencies: ReceiverSessionDependencies,
     motionPort: UInt16?,
     queue: DispatchQueue,
     activityChanged: @escaping @Sendable (PeerID) -> Void,
@@ -1196,7 +1196,7 @@ private final class ReceiverSession: @unchecked Sendable {
   ) throws {
     self.localPeerID = localPeerID
     self.acceptsAppUpdates = acceptsAppUpdates
-    self.motionSessions = motionSessions
+    self.dependencies = dependencies
     self.motionPort = motionPort
     self.activityChanged = activityChanged
     self.ended = ended
@@ -1221,7 +1221,7 @@ private final class ReceiverSession: @unchecked Sendable {
     let shouldRequest = lock.withLock { () -> Bool in
       guard !returnRequested, !finished else { return false }
       returnRequested = true
-      injector?.releaseAll()
+      retireInputLocked()
       localEscapeMonitor?.stop()
       return true
     }
@@ -1229,7 +1229,10 @@ private final class ReceiverSession: @unchecked Sendable {
     try? connection.send(.goodbye)
   }
 
-  private func handle(_ message: InputWireMessage) throws {
+  // Entry for already-authenticated decoded frames. Check again inside each
+  // side-effect critical section because stop can race work outside the lock.
+  func handle(_ message: InputWireMessage) throws {
+    try lock.withLock { try requireActiveLocked() }
     switch message {
     case .hello(let peerID, let version, let purpose):
       let versionIsCompatible =
@@ -1239,45 +1242,57 @@ private final class ReceiverSession: @unchecked Sendable {
       guard versionIsCompatible else {
         throw BonjourInputRelayError.receiverRejected("protocol version \(version)")
       }
-      lock.withLock {
+      try lock.withLock {
+        try requireActiveLocked()
+        guard remotePeerID == nil, sessionPurpose == nil else {
+          throw BonjourInputRelayError.receiverRejected("hello already accepted")
+        }
         remotePeerID = peerID
         sessionPurpose = purpose
       }
       try connection.send(.ready(peerID: localPeerID, motionPort: motionPort))
     case .beginInput(let sessionID, let mode, let initialModifierFlags):
-      guard let peerID = lock.withLock({
-        sessionPurpose == .inputRelay ? remotePeerID : nil
-      }) else {
-        throw BonjourInputRelayError.receiverRejected(
-          "input session arrived outside an input relay")
-      }
-      let injector = try MacInputInjector(sessionID: sessionID)
-      try lock.withLock {
-        guard self.injector == nil else {
+      let peerID = try lock.withLock { () throws -> PeerID in
+        try requireActiveLocked()
+        guard sessionPurpose == .inputRelay, let remotePeerID else {
+          throw BonjourInputRelayError.receiverRejected(
+            "input session arrived outside an input relay")
+        }
+        guard injector == nil else {
           throw BonjourInputRelayError.receiverRejected("input session already started")
         }
-        self.injector = injector
+        return remotePeerID
       }
-      motionSessions.register(injector)
-      MacInputModifierBridge.publish(CGEventFlags(rawValue: initialModifierFlags))
+      // Native construction may block. Stop remains responsive, and the second
+      // check prevents an unadopted result from resurrecting a finished session.
+      let created = try dependencies.makeInput(sessionID)
+      try lock.withLock {
+        try requireActiveLocked()
+        guard injector == nil else {
+          throw BonjourInputRelayError.receiverRejected("input session already started")
+        }
+        injector = created
+        dependencies.registerInput(created)
+        dependencies.publishModifiers(initialModifierFlags)
+      }
       activityChanged(peerID)
       if mode.returnsOnDestinationLocalInput { startLocalEscapeMonitor() }
     case .event(let packet):
-      guard lock.withLock({ remotePeerID != nil && sessionPurpose == .inputRelay }) else {
-        throw BonjourInputRelayError.receiverRejected(
-          "input event arrived outside an input relay")
+      let processingNanoseconds = try lock.withLock { () throws -> UInt64 in
+        try requireActiveLocked()
+        guard remotePeerID != nil, sessionPurpose == .inputRelay else {
+          throw BonjourInputRelayError.receiverRejected(
+            "input event arrived outside an input relay")
+        }
+        guard let injector else {
+          throw BonjourInputRelayError.receiverRejected("input event arrived before beginInput")
+        }
+        // Keep injection ordered against release/unregister in finish(). The
+        // sink still owns UUID/sequence/native event validation.
+        let startedAt = DispatchTime.now().uptimeNanoseconds
+        try injector.inject(packet)
+        return DispatchTime.now().uptimeNanoseconds - startedAt
       }
-      let injector = try lock.withLock { () throws -> MacInputInjector in
-        if let existing = self.injector { return existing }
-        let created = try MacInputInjector(sessionID: packet.sessionID)
-        self.injector = created
-        motionSessions.register(created)
-        return created
-      }
-      let processingStartedAt = DispatchTime.now().uptimeNanoseconds
-      try injector.inject(packet)
-      let processingNanoseconds =
-        DispatchTime.now().uptimeNanoseconds - processingStartedAt
       try connection.send(
         .eventAck(
           sequence: packet.sequence,
@@ -1290,33 +1305,43 @@ private final class ReceiverSession: @unchecked Sendable {
     case .eventAck:
       throw BonjourInputRelayError.receiverRejected("unexpected event acknowledgement")
     case .releaseAll:
-      lock.withLock { injector?.releaseAll() }
+      try lock.withLock {
+        try requireActiveLocked()
+        injector?.releaseAll()
+      }
     case .goodbye:
       finish()
     case .ready:
       throw BonjourInputRelayError.receiverRejected("unexpected ready message")
     case .appUpdate(let package):
-      guard lock.withLock({ sessionPurpose == .appUpdate }), acceptsAppUpdates else {
-        throw BonjourInputRelayError.receiverRejected("app update is not enabled for this session")
+      let sourcePeerID = try lock.withLock { () throws -> PeerID in
+        try requireActiveLocked()
+        guard sessionPurpose == .appUpdate, acceptsAppUpdates, let remotePeerID else {
+          throw BonjourInputRelayError.receiverRejected("app update is not enabled for this session")
+        }
+        return remotePeerID
       }
-      let sourcePeerID = lock.withLock { remotePeerID }
-      let result = DeskMuxAppUpdateInstaller.verifyInstallAndScheduleRelaunch(
-        package, sourcePeerID: sourcePeerID)
+      // Admission linearizes above. An admitted installation is not cancellable;
+      // keep its blocking work outside the lock so transport stop stays responsive.
+      let result = dependencies.installUpdate(package, sourcePeerID)
       try connection.send(.appUpdateResult(result))
     case .appUpdateResult:
       throw BonjourInputRelayError.receiverRejected("unexpected app update result")
     case .clipboardUpdate(let update):
-      guard let remotePeerID = lock.withLock({
-        sessionPurpose == .inputRelay ? self.remotePeerID : nil
-      }), update.sourcePeerID == remotePeerID else {
-        throw BonjourInputRelayError.receiverRejected(
-          "clipboard update arrived outside an input relay")
-      }
-      guard update.isWithinSizeLimit else {
-        throw BonjourInputRelayError.receiverRejected("clipboard update is too large")
-      }
-      DeskMuxClipboardBridge.shared.applyRemote(update) { [weak connection] in
-        try? connection?.send(.clipboardUpdateApplied(update.id))
+      try lock.withLock {
+        try requireActiveLocked()
+        guard sessionPurpose == .inputRelay, let remotePeerID,
+          update.sourcePeerID == remotePeerID
+        else {
+          throw BonjourInputRelayError.receiverRejected(
+            "clipboard update arrived outside an input relay")
+        }
+        guard update.isWithinSizeLimit else {
+          throw BonjourInputRelayError.receiverRejected("clipboard update is too large")
+        }
+        dependencies.applyClipboard(update) { [weak connection] in
+          try? connection?.send(.clipboardUpdateApplied(update.id))
+        }
       }
     case .clipboardUpdateApplied:
       throw BonjourInputRelayError.receiverRejected(
@@ -1324,12 +1349,27 @@ private final class ReceiverSession: @unchecked Sendable {
     }
   }
 
+  // Caller holds lock. A terminal or returning session cannot admit more work.
+  private func requireActiveLocked() throws {
+    guard !finished, !returnRequested else {
+      throw BonjourInputRelayError.receiverRejected("input receiver session has ended")
+    }
+  }
+
+  // Registry unregister drains any already-admitted motion before key/button
+  // release. Clearing the sink makes local return followed by finish idempotent.
+  private func retireInputLocked() {
+    guard let injector else { return }
+    dependencies.unregisterInput(injector.sessionID)
+    injector.releaseAll()
+    self.injector = nil
+  }
+
   private func finish() {
     let shouldFinish = lock.withLock { () -> Bool in
       guard !finished else { return false }
       finished = true
-      injector?.releaseAll()
-      if let injector { motionSessions.unregister(sessionID: injector.sessionID) }
+      retireInputLocked()
       localEscapeMonitor?.stop()
       localEscapeMonitor = nil
       return true
@@ -1340,11 +1380,11 @@ private final class ReceiverSession: @unchecked Sendable {
   }
 
   private func startLocalEscapeMonitor() {
-    let monitor = MacLocalEscapeMonitor { [weak self] in
+    let monitor = dependencies.makeEscapeMonitor { [weak self] in
       self?.requestReturnInput()
     }
     let shouldStart = lock.withLock { () -> Bool in
-      guard localEscapeMonitor == nil else { return false }
+      guard !finished, !returnRequested, localEscapeMonitor == nil else { return false }
       localEscapeMonitor = monitor
       return true
     }
@@ -1355,11 +1395,11 @@ private final class ReceiverSession: @unchecked Sendable {
   }
 }
 
-private final class MotionSessionRegistry: @unchecked Sendable {
+final class MotionSessionRegistry: @unchecked Sendable {
   private let lock = NSLock()
-  private var injectors: [UUID: MacInputInjector] = [:]
+  private var injectors: [UUID: any ReceiverInputSink] = [:]
 
-  func register(_ injector: MacInputInjector) {
+  func register(_ injector: any ReceiverInputSink) {
     lock.withLock { injectors[injector.sessionID] = injector }
   }
 
@@ -1368,8 +1408,9 @@ private final class MotionSessionRegistry: @unchecked Sendable {
   }
 
   func inject(_ state: PointerMotionState) {
-    let injector = lock.withLock { injectors[state.sessionID] }
-    try? injector?.injectPointerMotion(state)
+    // Keep lookup and injection together: unregister is a barrier for in-flight
+    // motion. Sinks must not reenter the registry or receiver from this call.
+    lock.withLock { try? injectors[state.sessionID]?.injectPointerMotion(state) }
   }
 }
 

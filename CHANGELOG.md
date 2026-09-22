@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.2.6 — Receiver session lifecycle
+
+- Reject input after shutdown or destination return, including decoded frames
+  remaining in the same encrypted receive batch.
+- Require one hello and an explicit input-session start; reject repeated starts
+  before constructing another native input sink.
+- Prevent input construction racing with shutdown from registering a new session;
+  serialize event injection with terminal release and unregister.
+- Unregister pointer motion before terminal input release and drain admitted
+  motion, preventing UDP motion from outliving local return or shutdown.
+- Check update admission atomically; an already-admitted installation may finish
+  after transport shutdown, while new requests are rejected.
+- Add isolated receiver acceptance using real encrypted localhost connections
+  and in-memory input, clipboard and update sinks. Native input, pasteboard,
+  installer and physical two-Mac acceptance remain separate manual gates.
+
 ## 0.2.5 — Reliable concurrent transport
 
 - Keep encrypted sequence assignment and network enqueue in the same critical

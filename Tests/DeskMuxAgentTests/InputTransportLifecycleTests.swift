@@ -190,7 +190,7 @@ private final class LoopbackInputHarness: @unchecked Sendable {
   }
 }
 
-private final class TransportReceipt: @unchecked Sendable {
+final class TransportReceipt: @unchecked Sendable {
   private let lock = NSLock()
   private var storedMessages: [InputWireMessage] = []
   private var storedFailures: [String] = []
