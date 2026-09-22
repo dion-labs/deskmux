@@ -156,7 +156,8 @@ final class DeskMuxClipboardBridge: @unchecked Sendable {
       leeway: .milliseconds(30)
     )
     timer.setEventHandler { [weak self] in
-      MainActor.assumeIsolated { self?.pollPasteboard() }
+      guard let self else { return }
+      MainActor.assumeIsolated { self.pollPasteboard() }
     }
     let adopted = lock.withLock { () -> Bool in
       guard self.timer == nil else { return false }

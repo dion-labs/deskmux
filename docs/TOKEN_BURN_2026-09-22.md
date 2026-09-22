@@ -79,3 +79,9 @@ The follow-up regression tests exercise the production delivery component using 
 ## Checkpoint 9 — v0.2.3 artifact accepted
 
 Release build exited 0. ZIP `DeskMux-0.2.3-macOS-arm64.zip` is 5,210,972 bytes; SHA256 `dae82e8701818881d096f7a17bf6598fa92da4e1d3b4d99b71b2cb1d6f2fed1b`. Fresh temp extraction: unzip integrity and strict deep codesign pass; app/agent 0.2.3 build 20260922065630; arm64 binary. Both app and agent designated requirements exactly match extracted v0.2.2 equivalents. This is signature evidence, not live TCC/upgrade acceptance. Diff reviewed, git diff --check clean. Publication next under root-authorized follow-up slot.
+
+## Checkpoint 10 — v0.2.3 publication and compiler compatibility follow-up
+
+Published v0.2.3 at https://github.com/dion-labs/deskmux/releases/tag/v0.2.3 on 2026-09-22T06:57:30Z, commit b7cb7c7. Redownloaded ZIP/checksum and matched `dae82e8701818881d096f7a17bf6598fa92da4e1d3b4d99b71b2cb1d6f2fed1b`. Site notified. However, GitHub runs 35697210679/35697210883 then FAILED compiling the timer weak-self capture inside MainActor.assumeIsolated. Toolchain facts: local Swift **6.3.2** passes; CI Xcode 26.3 / Swift **6.2.4** reports SendingRisksDataRace. Earlier coordination called CI newer; that was incorrect, the failure is compiler-version-dependent actor analysis.
+
+Promoted weak self to a strong immutable Sendable local before entering assumeIsolated; serial main-actor behavior unchanged. v0.2.4 prepared and full local **114 tests pass**, /tmp/deskmux-burn-v024-tests.log. Commit/push source then require fresh CI green before next publication. No artifact was overwritten or installed. Site told to hold final version pass; root status records continued patch release coordination request.

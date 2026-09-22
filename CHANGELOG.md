@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.4 — Swift concurrency compatibility
+
+- Promote the timer callback’s weak capture to a strong local before entering
+  the main actor, satisfying Swift 6.2 concurrency checking while preserving
+  serialized clipboard observation and replay.
+
 ## 0.2.3 — Clipboard replay ordering
 
 - Serialize reconnect replay with clipboard observation and remote application.
