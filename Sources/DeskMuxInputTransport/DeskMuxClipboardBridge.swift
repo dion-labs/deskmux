@@ -87,9 +87,9 @@ final class DeskMuxClipboardBridge: @unchecked Sendable {
   private var receivedUpdateIDs: [UUID] = []
   private var receivedUpdateIDSet: Set<UUID> = []
   private var timer: DispatchSourceTimer?
-  private static let loggingQueue = DispatchQueue(
-    label: "dev.deskmux.clipboard.log",
-    qos: .utility
+  private static let eventLog = DeskMuxClipboardEventLog(
+    directory: FileManager.default.homeDirectoryForCurrentUser
+      .appendingPathComponent("Library/Application Support/DeskMux", isDirectory: true)
   )
 
   private init() {}
@@ -145,7 +145,7 @@ final class DeskMuxClipboardBridge: @unchecked Sendable {
   }
 
   func recordAcknowledged(id: UUID) {
-    record("acknowledged", updateID: id)
+    Self.eventLog.record("acknowledged", updateID: id)
   }
 
   private func startMonitoring() {
@@ -181,51 +181,6 @@ final class DeskMuxClipboardBridge: @unchecked Sendable {
   }
 
   private func record(_ event: String, update: DeskMuxClipboardUpdate) {
-    record(
-      event,
-      updateID: update.id,
-      sourcePeerID: update.sourcePeerID.rawValue,
-      byteCount: update.text.lengthOfBytes(using: .utf8)
-    )
-  }
-
-  private func record(
-    _ event: String,
-    updateID: UUID,
-    sourcePeerID: String? = nil,
-    byteCount: Int? = nil
-  ) {
-    Self.loggingQueue.async {
-      let formatter = ISO8601DateFormatter()
-      formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-      var record: [String: Any] = [
-        "timestamp": formatter.string(from: Date()),
-        "event": event,
-        "update_id": updateID.uuidString,
-      ]
-      if let sourcePeerID { record["source"] = sourcePeerID }
-      if let byteCount { record["bytes"] = byteCount }
-      do {
-        let directory = FileManager.default.homeDirectoryForCurrentUser
-          .appendingPathComponent("Library/Application Support/DeskMux", isDirectory: true)
-        try FileManager.default.createDirectory(
-          at: directory,
-          withIntermediateDirectories: true
-        )
-        let url = directory.appendingPathComponent("clipboard.jsonl")
-        if !FileManager.default.fileExists(atPath: url.path) {
-          FileManager.default.createFile(atPath: url.path, contents: nil)
-        }
-        let handle = try FileHandle(forWritingTo: url)
-        defer { try? handle.close() }
-        try handle.seekToEnd()
-        try handle.write(
-          contentsOf: JSONSerialization.data(withJSONObject: record, options: [.sortedKeys])
-        )
-        try handle.write(contentsOf: Data([0x0a]))
-      } catch {
-        // Clipboard diagnostics must never affect synchronization.
-      }
-    }
+    Self.eventLog.record(event, update: update)
   }
 }

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.5 — Reliable concurrent transport
+
+- Keep encrypted sequence assignment and network enqueue in the same critical
+  section, preventing concurrent senders from causing out-of-order disconnects.
+- Reject new sends immediately after local cancellation, including while native
+  state callbacks are delayed.
+- Isolate the unchanged clipboard metadata logger for disposable-directory
+  persistence, concurrent append, redaction and failure-recovery acceptance.
+- Add localhost-only encrypted transport acceptance for reconnect, wrong-key
+  rejection, consumer rejection, concurrent sends and a 1 MiB UTF-8 payload.
+
 ## 0.2.4 — Swift concurrency compatibility
 
 - Promote the timer callback’s weak capture to a strong local before entering

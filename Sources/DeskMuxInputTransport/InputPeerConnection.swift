@@ -48,7 +48,7 @@ final class InputPeerConnection: @unchecked Sendable {
     connection.stateUpdateHandler = { [weak self] state in
       guard let self else { return }
       lock.withLock {
-        if case .ready = state { ready = true } else { ready = false }
+        if case .ready = state { ready = !cancelledByOwner } else { ready = false }
       }
       stateHandler(state)
       if state == .ready { receiveNext() }
@@ -57,20 +57,27 @@ final class InputPeerConnection: @unchecked Sendable {
   }
 
   func send(_ message: InputWireMessage) throws {
-    guard lock.withLock({ ready }) else { throw InputPeerConnectionError.notReady }
-    let data = try codec.seal(message)
-    connection.send(
-      content: data,
-      completion: .contentProcessed { [weak self] error in
-        guard let self, let error else { return }
-        guard !lock.withLock({ cancelledByOwner }) else { return }
-        stateHandler(.failed(error))
-        connection.cancel()
-      })
+    // Sequence assignment and network enqueue are one operation. Otherwise
+    // concurrent producers can seal N, N+1 but enqueue N+1 before N.
+    try lock.withLock {
+      guard ready, !cancelledByOwner else { throw InputPeerConnectionError.notReady }
+      let data = try codec.seal(message)
+      connection.send(
+        content: data,
+        completion: .contentProcessed { [weak self] error in
+          guard let self, let error else { return }
+          guard !lock.withLock({ cancelledByOwner }) else { return }
+          stateHandler(.failed(error))
+          connection.cancel()
+        })
+    }
   }
 
   func cancel() {
-    lock.withLock { cancelledByOwner = true }
+    lock.withLock {
+      cancelledByOwner = true
+      ready = false
+    }
     connection.cancel()
   }
 
