@@ -1,5 +1,6 @@
 import AppKit
 import DeskMuxAgentIPC
+import DeskMuxCore
 import DeskMuxMacInput
 import Foundation
 import ServiceManagement
@@ -16,6 +17,9 @@ final class BackgroundAgentModel: ObservableObject {
   private static let currentAgentLayoutVersion = 31
   private static let agentLayoutDefaultsKey = "DeskMuxAgentLayoutVersion"
   private static let inputAnchorDefaultsKey = "DeskMuxInputAnchor"
+  private let runtimeEventLog = DeskMuxRuntimeEventLog(
+    directory: FileManager.default.homeDirectoryForCurrentUser
+      .appendingPathComponent("Library/Application Support/DeskMux", isDirectory: true))
 
   @Published private(set) var serviceStatus: SMAppService.Status = .notRegistered
   @Published private(set) var agentStatus: DeskMuxAgentStatus?
@@ -826,34 +830,12 @@ final class BackgroundAgentModel: ObservableObject {
   }
 
   private func recordHandoff(_ event: String, detail: String? = nil) {
-    let timestampFormatter = ISO8601DateFormatter()
-    timestampFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-    let record: [String: String] = [
-      "timestamp": timestampFormatter.string(from: Date()),
-      "event": event,
-      "peer": localPeerID,
-      "build": Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "0",
-      "anchor": UserDefaults.standard.string(forKey: Self.inputAnchorDefaultsKey) ?? "studio",
-      "keyboardRelayState": agentStatus?.keyboardRelayState?.rawValue ?? "unknown",
-      "keyboardRelayError": agentStatus?.keyboardRelayError ?? "",
-      "logitechFlowConflict": String(logitechFlowConflict),
-      "detail": detail ?? "",
-    ]
-    do {
-      let directory = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent("Library/Application Support/DeskMux", isDirectory: true)
-      try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-      let url = directory.appendingPathComponent("handoff.jsonl")
-      if !FileManager.default.fileExists(atPath: url.path) {
-        FileManager.default.createFile(atPath: url.path, contents: nil)
-      }
-      let handle = try FileHandle(forWritingTo: url)
-      defer { try? handle.close() }
-      try handle.seekToEnd()
-      try handle.write(contentsOf: JSONSerialization.data(withJSONObject: record, options: [.sortedKeys]))
-      try handle.write(contentsOf: Data([0x0a]))
-    } catch {
-      // Diagnostics must never interfere with input handoff.
-    }
+    runtimeEventLog.recordHandoff(
+      event, peer: localPeerID,
+      build: Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "0",
+      anchor: UserDefaults.standard.string(forKey: Self.inputAnchorDefaultsKey) ?? "studio",
+      keyboardRelayState: agentStatus?.keyboardRelayState?.rawValue ?? "unknown",
+      keyboardRelayError: agentStatus?.keyboardRelayError ?? "",
+      logitechFlowConflict: logitechFlowConflict, detail: detail)
   }
 }

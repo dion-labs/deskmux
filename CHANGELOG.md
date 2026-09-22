@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.7 — Reliable diagnostic appends
+
+- Prevent concurrent network and handoff log writers from overwriting or
+  interleaving JSONL records through atomic append and per-file serialization.
+- Isolate the existing writer behind an explicit directory dependency for
+  disposable persistence, recreation, external rotation and error-recovery tests.
+- Preserve existing metadata fields and synchronous error handling. Diagnostic
+  details remain verbatim; JSON escaping does not provide general redaction.
+
 ## 0.2.6 — Receiver session lifecycle
 
 - Reject input after shutdown or destination return, including decoded frames

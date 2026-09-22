@@ -116,6 +116,14 @@ warm connection never captures or injects input by itself. The menu reports the
 warm channel state and its latest round-trip time. Connection lifecycle records
 are appended to `~/Library/Application Support/DeskMux/network.jsonl`.
 
+Network and handoff writers reopen their file for each synchronous append and
+serialize each complete JSONL record. If a log is externally renamed or removed,
+the next append recreates its original path; DeskMux has no automatic rotation
+policy. Write failures are ignored and later appends retry. These logs contain
+peer identifiers and diagnostic detail/error strings verbatim: review them
+before sharing. JSON escaping prevents embedded newlines from forging log rows;
+it does not redact sensitive text supplied in a diagnostic string.
+
 That same encrypted warm channel synchronizes plain text copied on either Mac,
 independently of which Mac currently owns the mouse and keyboard. Clipboard
 changes are observed every 150 milliseconds, capped at 1 MiB, and tagged with a

@@ -8,6 +8,9 @@ import Foundation
 import Security
 
 private final class DeskMuxAgentService: NSObject, DeskMuxAgentXPCProtocol, @unchecked Sendable {
+  private let runtimeEventLog = DeskMuxRuntimeEventLog(
+    directory: FileManager.default.homeDirectoryForCurrentUser
+      .appendingPathComponent("Library/Application Support/DeskMux", isDirectory: true))
   private let lock = NSLock()
   private let logitechProbeLock = NSLock()
   private var cachedLogitechStatus: (status: DeskMuxLogitechStatus, observedAt: Date)?
@@ -614,32 +617,10 @@ private final class DeskMuxAgentService: NSObject, DeskMuxAgentXPCProtocol, @unc
   }
 
   private func recordNetwork(_ event: String, detail: String) {
-    let formatter = ISO8601DateFormatter()
-    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-    let record = [
-      "timestamp": formatter.string(from: Date()),
-      "event": event,
-      "peer": lock.withLock { configuration?.peerID ?? "unknown" },
-      "build": Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "0",
-      "detail": detail,
-    ]
-    do {
-      let directory = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent("Library/Application Support/DeskMux", isDirectory: true)
-      try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-      let url = directory.appendingPathComponent("network.jsonl")
-      if !FileManager.default.fileExists(atPath: url.path) {
-        FileManager.default.createFile(atPath: url.path, contents: nil)
-      }
-      let handle = try FileHandle(forWritingTo: url)
-      defer { try? handle.close() }
-      try handle.seekToEnd()
-      try handle.write(
-        contentsOf: JSONSerialization.data(withJSONObject: record, options: [.sortedKeys]))
-      try handle.write(contentsOf: Data([0x0a]))
-    } catch {
-      // Network diagnostics must never affect input routing.
-    }
+    runtimeEventLog.recordNetwork(
+      event, peer: lock.withLock { configuration?.peerID ?? "unknown" },
+      build: Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "0",
+      detail: detail)
   }
 
   private func receiverChanged(
