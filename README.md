@@ -31,7 +31,7 @@ Different Apple Accounts work. No cloud account or subscription is needed.
 
 ## Before you download
 
-This is **v0.2.1, a public preview**. Daily use has been validated with a
+This is **v0.2.2, a public preview**. Daily use has been validated with a
 Mac Studio M1 Ultra, MacBook Pro M1 Pro and Logitech MX Master 4 (Bolt on the
 desktop, Bluetooth on the laptop), on macOS 26.5.2. The deployment target is
 macOS 14+, but older versions and other HID++ mice need testing. The download
@@ -46,8 +46,10 @@ Clipboard sharing currently transfers plain text up to 1 MiB; rich text,
 images and files stay local. Sensitive copied text is shared too. See
 [Security and privacy](SECURITY.md).
 
-Virtual-display streaming is **experimental**. Physical monitor input
-switching and complete video routing are **not part of this release**.
+Experimental AOC monitor controls are included, with peer-local display
+discovery and opt-in input following and window placement. MacBook HDMI
+switching still requires physical validation. Complete video routing is not
+a supported release feature. Virtual-display streaming is experimental.
 
 ## Set up your desk
 

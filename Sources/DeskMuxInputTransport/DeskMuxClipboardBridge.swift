@@ -2,6 +2,30 @@
 import DeskMuxCore
 import Foundation
 
+/// Tracks only text belonging to the current observed pasteboard generation.
+/// Unsupported or oversized replacements must invalidate reconnect delivery too.
+struct DeskMuxClipboardObservation {
+  private var lastObservedChangeCount: Int?
+  private(set) var pendingLocalUpdate: DeskMuxClipboardUpdate?
+
+  mutating func observe(changeCount: Int) -> Bool {
+    guard lastObservedChangeCount != changeCount else { return false }
+    let wasInitialized = lastObservedChangeCount != nil
+    lastObservedChangeCount = changeCount
+    pendingLocalUpdate = nil
+    return wasInitialized
+  }
+
+  mutating func recordLocal(_ update: DeskMuxClipboardUpdate) {
+    pendingLocalUpdate = update.isWithinSizeLimit ? update : nil
+  }
+
+  mutating func appliedRemote(changeCount: Int) {
+    lastObservedChangeCount = changeCount
+    pendingLocalUpdate = nil
+  }
+}
+
 /// Process-wide plain-text clipboard synchronization for DeskMux's stable,
 /// encrypted peer connection. Remote writes advance the observed pasteboard
 /// generation before polling can echo them back to their source.
@@ -13,8 +37,7 @@ final class DeskMuxClipboardBridge: @unchecked Sendable {
   private let lock = NSLock()
   private var observers: [UUID: UpdateHandler] = [:]
   private var localPeerID: PeerID?
-  private var lastObservedChangeCount: Int?
-  private var pendingLocalUpdate: DeskMuxClipboardUpdate?
+  private var observation = DeskMuxClipboardObservation()
   private var receivedUpdateIDs: [UUID] = []
   private var receivedUpdateIDSet: Set<UUID> = []
   private var timer: DispatchSourceTimer?
@@ -33,7 +56,7 @@ final class DeskMuxClipboardBridge: @unchecked Sendable {
     let state = lock.withLock { () -> (Bool, DeskMuxClipboardUpdate?) in
       self.localPeerID = localPeerID
       observers[id] = handler
-      return (timer == nil, pendingLocalUpdate)
+      return (timer == nil, observation.pendingLocalUpdate)
     }
     if state.0 { startMonitoring() }
     if let pending = state.1 { handler(pending) }
@@ -71,8 +94,7 @@ final class DeskMuxClipboardBridge: @unchecked Sendable {
       pasteboard.clearContents()
       pasteboard.setString(update.text, forType: .string)
       lock.withLock {
-        lastObservedChangeCount = pasteboard.changeCount
-        pendingLocalUpdate = nil
+        observation.appliedRemote(changeCount: pasteboard.changeCount)
       }
       record("applied", update: update)
       completion()
@@ -112,12 +134,7 @@ final class DeskMuxClipboardBridge: @unchecked Sendable {
     let pasteboard = NSPasteboard.general
     let changeCount = pasteboard.changeCount
     let peerID = lock.withLock { () -> PeerID? in
-      if lastObservedChangeCount == nil {
-        lastObservedChangeCount = changeCount
-        return nil
-      }
-      guard lastObservedChangeCount != changeCount else { return nil }
-      lastObservedChangeCount = changeCount
+      guard observation.observe(changeCount: changeCount) else { return nil }
       return localPeerID
     }
     guard let peerID,
@@ -127,7 +144,7 @@ final class DeskMuxClipboardBridge: @unchecked Sendable {
     let update = DeskMuxClipboardUpdate(sourcePeerID: peerID, text: text)
     guard update.isWithinSizeLimit else { return }
     let handlers = lock.withLock { () -> [UpdateHandler] in
-      pendingLocalUpdate = update
+      observation.recordLocal(update)
       return Array(observers.values)
     }
     for handler in handlers { handler(update) }

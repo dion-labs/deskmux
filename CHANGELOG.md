@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.2 — Clipboard reconnect privacy
+
+- Discard cached outgoing text when a new clipboard generation is observed,
+  including images, files, cleared clipboard and oversized text. Reconnecting
+  peers no longer receive text from the preceding observed clipboard generation.
+- Add synthetic clipboard recovery and encrypted-frame boundary regression tests.
+- Document risk-based QA and remaining physical/manual acceptance gates.
+
 ## 0.2.1 — Desk window and local monitor discovery
 
 - Open Your desk as an explicit window from the menu bar.

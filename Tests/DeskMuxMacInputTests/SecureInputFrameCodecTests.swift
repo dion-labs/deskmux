@@ -115,3 +115,43 @@ import Testing
     try sender.open(payload)
   }
 }
+
+// DM-016: an untrusted header must be rejected without allocating its body.
+@Test func inputParserRejectsOversizedHeaderAndBuffersIncompleteFrames() throws {
+  var invalidParser = InputFrameParser()
+  let oversized = SecureInputFrameCodec.maximumFrameSize + 1
+  var header = UInt32(oversized).bigEndian
+  let bytes = withUnsafeBytes(of: &header) { Data($0) }
+  #expect(try invalidParser.append(Data(bytes.prefix(3))).isEmpty)
+  #expect(throws: SecureInputFrameError.frameTooLarge(oversized)) {
+    try invalidParser.append(Data(bytes.suffix(1)))
+  }
+
+  let sender = try SecureInputFrameCodec(sharedKey: "synthetic", role: .initiator)
+  let receiver = try SecureInputFrameCodec(sharedKey: "synthetic", role: .acceptor)
+  let first = try sender.seal(.ping(1))
+  let second = try sender.seal(.pong(1))
+  var parser = InputFrameParser()
+  #expect(try parser.append(Data(first.dropLast())).isEmpty)
+  let frames = try parser.append(Data(first.suffix(1)) + second)
+  #expect(try frames.map { try receiver.open($0) } == [.ping(1), .pong(1)])
+  #expect(try parser.append(Data()).isEmpty)
+}
+
+// DM-017: rejection cannot consume a sequence number or poison a valid message.
+@Test func inputAuthenticationAndOrderFailuresDoNotAdvanceSequence() throws {
+  let sender = try SecureInputFrameCodec(sharedKey: "synthetic", role: .initiator)
+  let receiver = try SecureInputFrameCodec(sharedKey: "synthetic", role: .acceptor)
+  var parser = InputFrameParser()
+  let frames = try parser.append(sender.seal(.ping(4)) + sender.seal(.pong(4)))
+  #expect(frames.count == 2)
+  #expect(throws: SecureInputFrameError.frameTooShort) { try receiver.open(Data([0])) }
+  #expect(throws: SecureInputFrameError.unexpectedSequence(expected: 0, received: 1)) {
+    try receiver.open(frames[1])
+  }
+  var corrupt = frames[0]
+  corrupt[corrupt.index(before: corrupt.endIndex)] ^= 1
+  #expect(throws: SecureInputFrameError.authenticationFailed) { try receiver.open(corrupt) }
+  #expect(try receiver.open(frames[0]) == .ping(4))
+  #expect(try receiver.open(frames[1]) == .pong(4))
+}
