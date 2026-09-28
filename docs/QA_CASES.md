@@ -66,6 +66,7 @@ Status: **A** means automated evidence from 2026-09-22: baseline e9e6ac0 (103 te
 | DM-055 | P1 metadata/privacy boundary | Unicode/newline diagnostic canary remains one JSON record with existing key allowlist; cannot forge top-level clipboard/key fields | runtimeLogSchemaAndEscapingDoNotInventPrivateFields; detail/error are still verbatim diagnostics, not redacted; does not certify actual service inputs are free of private data | P |
 
 | DM-056 | P0 diagnostic noninterference | Owned temporary Python process holds log lock; actual writer returns within deadline, skips contended record, and resumes persistence after unlock | runtimeLogHeldProcessLockDoesNotDelayCallerAndRecovers for both network/handoff; synchronous blocking-lock candidate failed, nonblocking best-effort fix passes | A |
+| DM-057 | P0 updater subprocess completion | Child writes more than pipe capacity to stdout/stderr on success or before a failure diagnostic; runner drains before waiting | updateProcessDrainsLargeSuccessfulOutputBeforeWaiting and updateProcessDrainsLargeFailureThroughFinalDiagnostic; exact-source baseline stalled, child-local alarms bound regression fixtures; no general process timeout/descendant/output-cap guarantee | A |
 
 ## September 28 reconciliation
 

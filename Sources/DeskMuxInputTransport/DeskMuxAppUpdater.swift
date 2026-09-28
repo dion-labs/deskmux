@@ -62,7 +62,7 @@ public enum DeskMuxAppUpdatePackager {
     defer { try? FileManager.default.removeItem(at: temporaryDirectory) }
 
     let archiveURL = temporaryDirectory.appendingPathComponent("DeskMux.zip")
-    try runProcess(
+    try runDeskMuxUpdateProcess(
       executable: "/usr/bin/ditto",
       arguments: ["-c", "-k", "--keepParent", appURL.path, archiveURL.path]
     )
@@ -230,7 +230,7 @@ public enum DeskMuxAppUpdateInstaller {
     try package.archiveData.write(to: archiveURL, options: .atomic)
     let extractedURL = temporaryDirectory.appendingPathComponent("extracted", isDirectory: true)
     try FileManager.default.createDirectory(at: extractedURL, withIntermediateDirectories: true)
-    try runProcess(
+    try runDeskMuxUpdateProcess(
       executable: "/usr/bin/ditto",
       arguments: ["-x", "-k", archiveURL.path, extractedURL.path]
     )
@@ -245,7 +245,7 @@ public enum DeskMuxAppUpdateInstaller {
     guard candidateBuild == package.build else { throw DeskMuxAppUpdateError.invalidBundle }
 
     do {
-      try runProcess(
+      try runDeskMuxUpdateProcess(
         executable: "/usr/bin/codesign",
         arguments: ["--verify", "--deep", "--strict", candidateURL.path]
       )
@@ -446,26 +446,22 @@ private func sha256(_ data: Data) -> String {
 }
 
 private func designatedRequirement(_ appURL: URL) throws -> String {
-  let process = Process()
-  let output = Pipe()
-  process.executableURL = URL(fileURLWithPath: "/usr/bin/codesign")
-  process.arguments = ["-d", "-r", "-", appURL.path]
-  process.standardOutput = output
-  process.standardError = output
-  try process.run()
-  process.waitUntilExit()
-  guard process.terminationStatus == 0 else {
+  let output: Data
+  do {
+    output = try runDeskMuxUpdateProcess(
+      executable: "/usr/bin/codesign", arguments: ["-d", "-r", "-", appURL.path])
+  } catch DeskMuxAppUpdateError.processFailed(_) {
     throw DeskMuxAppUpdateError.signatureInvalid
   }
-  let text = String(
-    decoding: output.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+  let text = String(decoding: output, as: UTF8.self)
   guard
     let requirement = text.split(separator: "\n").first(where: { $0.hasPrefix("designated =>") })
   else { throw DeskMuxAppUpdateError.signatureInvalid }
   return String(requirement)
 }
 
-private func runProcess(executable: String, arguments: [String]) throws {
+@discardableResult
+func runDeskMuxUpdateProcess(executable: String, arguments: [String]) throws -> Data {
   let process = Process()
   let errors = Pipe()
   process.executableURL = URL(fileURLWithPath: executable)
@@ -473,11 +469,14 @@ private func runProcess(executable: String, arguments: [String]) throws {
   process.standardOutput = errors
   process.standardError = errors
   try process.run()
+  // Drain while the child can still write. Waiting first can deadlock when
+  // stdout/stderr fill the pipe, including commands that would exit successfully.
+  let output = errors.fileHandleForReading.readDataToEndOfFile()
   process.waitUntilExit()
   guard process.terminationStatus == 0 else {
-    let message = String(
-      decoding: errors.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+    let message = String(decoding: output, as: UTF8.self)
     throw DeskMuxAppUpdateError.processFailed(
       "\(URL(fileURLWithPath: executable).lastPathComponent) failed: \(message)")
   }
+  return output
 }
