@@ -38,11 +38,17 @@ private func runtimeLogConcurrentWritersPreserveWholeOrderedRecords(_ kind: Runt
   defer { try? FileManager.default.removeItem(at: root) }
   let writers = (0..<8).map { _ in DeskMuxRuntimeEventLog(directory: root) }
   let detail = String(repeating: "synthetic-🧪\n", count: 512)
-  DispatchQueue.concurrentPerform(iterations: writers.count) { producer in
-    for index in 0..<40 {
-      kind.record(writers[producer], event: "producer-\(producer)-\(index)", detail: detail)
+  let completed = DispatchGroup()
+  for producer in writers.indices {
+    completed.enter()
+    Thread.detachNewThread {
+      defer { completed.leave() }
+      for index in 0..<40 {
+        kind.record(writers[producer], event: "producer-\(producer)-\(index)", detail: detail)
+      }
     }
   }
+  completed.wait()
   let rows = try runtimeLogRows(root.appendingPathComponent(kind.filename))
   // Contended diagnostic records may be dropped, but persisted records must
   // remain complete, unique and in each synchronous producer's order.
@@ -151,7 +157,9 @@ private func runtimeLogHeldProcessLockDoesNotDelayCallerAndRecovers(_ kind: Runt
   let holder = try RuntimeLogLockHolder(url: root.appendingPathComponent(kind.filename))
   defer { holder.release() }
   let returned = DispatchSemaphore(value: 0)
-  DispatchQueue.global().async {
+  // Do not queue this deliberately deadline-sensitive call behind blocking
+  // fixtures on the shared dispatch pool (notably on small CI runners).
+  Thread.detachNewThread {
     kind.record(writer, event: "contended-best-effort")
     returned.signal()
   }

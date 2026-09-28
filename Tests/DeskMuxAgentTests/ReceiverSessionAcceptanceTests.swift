@@ -161,8 +161,10 @@ import Testing
   try fixture.hello()
   try fixture.client.send(.beginInput(sessionID: UUID(), mode: .keyboardOnly, initialModifierFlags: 7))
   #expect(effects.waitForInputFactory())
+  // Dedicated fixture threads avoid starving behind other synchronous tests
+  // on the shared dispatch pool while this test deliberately waits.
   let stopped = DispatchSemaphore(value: 0)
-  DispatchQueue.global().async { fixture.server.stop(); stopped.signal() }
+  Thread.detachNewThread { fixture.server.stop(); stopped.signal() }
   let stopReturned = stopped.wait(timeout: .now() + 2) == .success
   effects.resumeInputFactory() // Always unblock the receiver even if the assertion fails.
   #expect(stopReturned)
@@ -329,7 +331,7 @@ private func packet(_ session: UUID, _ sequence: UInt64, key: UInt8) -> InputEve
   let sink = try #require(fixture.effects.inputs.first)
   sink.pauseMotion()
   let motionDone = DispatchSemaphore(value: 0)
-  DispatchQueue.global().async {
+  Thread.detachNewThread {
     fixture.effects.motionRegistry.inject(PointerMotionState(sessionID: session, sequence: 0,
       kind: .mouseMoved, cumulativeDeltaX: 1, cumulativeDeltaY: 2))
     motionDone.signal()
@@ -337,7 +339,7 @@ private func packet(_ session: UUID, _ sequence: UInt64, key: UInt8) -> InputEve
   #expect(sink.waitForMotion())
   let stopping = DispatchSemaphore(value: 0)
   let stopped = DispatchSemaphore(value: 0)
-  DispatchQueue.global().async { stopping.signal(); fixture.server.stop(); stopped.signal() }
+  Thread.detachNewThread { stopping.signal(); fixture.server.stop(); stopped.signal() }
   #expect(stopping.wait(timeout: .now() + 5) == .success)
   // A terminal operation must wait for the already-admitted motion effect.
   #expect(stopped.wait(timeout: .now() + 0.05) == .timedOut)

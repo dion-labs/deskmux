@@ -48,7 +48,7 @@ Status: **A** means automated evidence from 2026-09-22: baseline e9e6ac0 (103 te
 | DM-040 | P0 error/recovery | Wrong key closes transport without delivering plaintext; a throwing consumer closes authenticated transport; next correct connection works | loopbackTransportRejectsWrongKeyAndAcceptsNextConnection, loopbackTransportClosesWhenConsumerRejectsAuthenticatedMessage; fixture consumer policy is not production receiver identity validation | A |
 | DM-041 | P0 cancel | Pause network callbacks, cancel, then try another send; reject immediately before asynchronous cancellation callback | loopbackCancelImmediatelyRejectsFurtherSends; failed on v0.2.4 then passes after synchronous send-gate fix | A |
 | DM-042 | P1 concurrency/order | Eight concurrent producers enqueue 800 encrypted messages; receiver accepts every unique message without sequence failure | loopbackConcurrentProducersPreserveEncryptedSequence; v0.2.4 failed EPROTO, seal+enqueue serialization fixes it | A |
-| DM-043 | P1 privacy/persistence/recovery | Persist clipboard metadata, recreate writer, append concurrently; valid whole JSONL records, no text fields/content; blocked destination fails harmlessly and resumes after repair | ClipboardEventLogTests using production asynchronous logger and disposable directories; network/handoff logs still unisolated/manual | A |
+| DM-043 | P1 privacy/persistence/recovery | Persist clipboard metadata, recreate writer, append concurrently; valid whole JSONL records, no text fields/content; blocked destination fails harmlessly and resumes after repair | ClipboardEventLogTests using production asynchronous logger and disposable directories; network/handoff storage now has DM-052–056 fixtures; actual service input privacy remains manual | A |
 | DM-044 | P1 framing/platform | Send 1 MiB synthetic UTF-8 clipboard payload across real 64 KiB receive chunks, acknowledge same update ID; byte-identical decoded message and encrypted reply | loopbackClipboardPayloadSurvivesChunkingAndAcknowledgement; no pasteboard or real clipboard bridge | A |
 
 | DM-045 | P0 admission | Reject input before hello/begin, repeated hello, duplicate begin, unsupported directions and protocol versions | ReceiverSessionAcceptanceTests exercises actual ReceiverSession over encrypted localhost transport with entirely fake effects; native UUID/CGEvent validation remains separate | A |
@@ -66,6 +66,22 @@ Status: **A** means automated evidence from 2026-09-22: baseline e9e6ac0 (103 te
 | DM-055 | P1 metadata/privacy boundary | Unicode/newline diagnostic canary remains one JSON record with existing key allowlist; cannot forge top-level clipboard/key fields | runtimeLogSchemaAndEscapingDoNotInventPrivateFields; detail/error are still verbatim diagnostics, not redacted; does not certify actual service inputs are free of private data | P |
 
 | DM-056 | P0 diagnostic noninterference | Owned temporary Python process holds log lock; actual writer returns within deadline, skips contended record, and resumes persistence after unlock | runtimeLogHeldProcessLockDoesNotDelayCallerAndRecovers for both network/handoff; synchronous blocking-lock candidate failed, nonblocking best-effort fix passes | A |
+
+## September 28 reconciliation
+
+Current fetched source is eab3f91 with preserved test-only dedicated-thread fixes.
+The latest published release is0.2.6;0.2.7 is pending. Prior supportedCI at eab3f91
+failed scheduling-sensitive receiver/log fixtures, so its release gate remains
+open until fresh qualification. September22 evidence is historical and reusable
+only for unchanged boundaries; the fresh full baseline passed150 tests onSwift6.3.2; evidence is recorded in
+TOKEN_BURN_2026-09-28.md and dist/qa-2026-09-28/baseline.log.
+Supported-toolchainCI for the preserved thread fixes remains pending.
+
+Studio's persisted visible-window routing preference is now enabled, following
+D's September28 correction. This does not qualify DM-009/010/028–030: physical
+switching and actual window migration remain unverified. Do not toggle live
+settings or run hardware/services as fixtures. DM-055 stays partial because
+free-form diagnostic strings remain verbatim.
 
 ## Reproduction and acceptance receipt
 
