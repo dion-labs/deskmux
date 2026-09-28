@@ -132,15 +132,53 @@ public enum DeskMuxAppUpdateInstaller {
   ) -> DeskMuxUpdateResult {
     do {
       let currentAppURL = try runningDeskMuxAppURL()
+      let fileManager = FileManager.default
+      let applicationsDirectory =
+        fileManager.urls(for: .applicationDirectory, in: .userDomainMask).first
+        ?? fileManager.homeDirectoryForCurrentUser.appendingPathComponent("Applications", isDirectory: true)
+      return verifyInstall(
+        package,
+        sourcePeerID: sourcePeerID,
+        currentAppURL: currentAppURL,
+        applicationsDirectory: applicationsDirectory,
+        stagingParent: fileManager.temporaryDirectory,
+        receiptURL: receiptURL(),
+        relaunch: scheduleRelaunch
+      )
+    } catch {
+      return .rejected(reason: String(describing: error))
+    }
+  }
+
+  // All environment-dependent paths and the process-launch boundary are explicit.
+  // Tests use only owned temporary directories and a recording relaunch callback.
+  static func verifyInstall(
+    _ package: DeskMuxUpdatePackage,
+    sourcePeerID: PeerID? = nil,
+    currentAppURL: URL,
+    applicationsDirectory: URL,
+    stagingParent: URL,
+    receiptURL: URL,
+    relaunch: (URL) throws -> Void
+  ) -> DeskMuxUpdateResult {
+    let stagingDirectory = stagingParent
+      .appendingPathComponent("deskmux-update-target-\(UUID().uuidString)", isDirectory: true)
+    // Own staging through verification, installation and relaunch scheduling.
+    // Only this invocation's directory is removed, never installed/backup apps.
+    defer { try? FileManager.default.removeItem(at: stagingDirectory) }
+    do {
       let installedBuild =
         Bundle(url: currentAppURL)?.object(forInfoDictionaryKey: "CFBundleVersion") as? String
         ?? "0"
       let candidateURL = try verifyAndExtract(
         package,
         installedBuild: installedBuild,
-        currentAppURL: currentAppURL
+        currentAppURL: currentAppURL,
+        stagingDirectory: stagingDirectory
       )
-      let installedURL = try install(candidateURL, currentAppURL: currentAppURL)
+      let installedURL = try install(
+        candidateURL, currentAppURL: currentAppURL,
+        applicationsDirectory: applicationsDirectory)
       try? saveReceipt(
         DeskMuxAppUpdateReceipt(
           sourcePeerID: sourcePeerID,
@@ -148,8 +186,8 @@ public enum DeskMuxAppUpdateInstaller {
           installedVersion: package.version,
           installedBuild: package.build,
           installedAt: Date()
-        ))
-      try scheduleRelaunch(installedURL)
+        ), at: receiptURL)
+      try relaunch(installedURL)
       return .accepted(build: package.build)
     } catch {
       return .rejected(reason: String(describing: error))
@@ -170,7 +208,8 @@ public enum DeskMuxAppUpdateInstaller {
   private static func verifyAndExtract(
     _ package: DeskMuxUpdatePackage,
     installedBuild: String,
-    currentAppURL: URL
+    currentAppURL: URL,
+    stagingDirectory temporaryDirectory: URL
   ) throws -> URL {
     guard package.archiveData.count <= DeskMuxAppUpdatePackager.maximumArchiveSize else {
       throw DeskMuxAppUpdateError.archiveTooLarge(package.archiveData.count)
@@ -185,8 +224,6 @@ public enum DeskMuxAppUpdateInstaller {
       throw DeskMuxAppUpdateError.downgrade(current: installedBuild, offered: package.build)
     }
 
-    let temporaryDirectory = FileManager.default.temporaryDirectory
-      .appendingPathComponent("deskmux-update-target-\(UUID().uuidString)", isDirectory: true)
     try FileManager.default.createDirectory(
       at: temporaryDirectory, withIntermediateDirectories: true)
     let archiveURL = temporaryDirectory.appendingPathComponent("DeskMux.zip")
@@ -223,14 +260,10 @@ public enum DeskMuxAppUpdateInstaller {
     return candidateURL
   }
 
-  private static func install(_ candidateURL: URL, currentAppURL: URL) throws -> URL {
+  private static func install(
+    _ candidateURL: URL, currentAppURL: URL, applicationsDirectory: URL
+  ) throws -> URL {
     let fileManager = FileManager.default
-    let applicationsDirectory =
-      fileManager.urls(for: .applicationDirectory, in: .userDomainMask).first
-      ?? fileManager.homeDirectoryForCurrentUser.appendingPathComponent(
-        "Applications",
-        isDirectory: true
-      )
     let layout = DeskMuxInstallLayout(
       currentAppURL: currentAppURL,
       applicationsDirectory: applicationsDirectory
@@ -388,8 +421,7 @@ public enum DeskMuxAppUpdateInstaller {
     return appURL
   }
 
-  private static func saveReceipt(_ receipt: DeskMuxAppUpdateReceipt) throws {
-    let url = receiptURL()
+  private static func saveReceipt(_ receipt: DeskMuxAppUpdateReceipt, at url: URL) throws {
     try FileManager.default.createDirectory(
       at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
     let encoder = JSONEncoder()
