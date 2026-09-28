@@ -358,10 +358,10 @@ public enum DeskMuxAppUpdateInstaller {
       if fileManager.isWritableFile(
         atPath: layout.currentAppURL.deletingLastPathComponent().path
       ) {
-        if fileManager.fileExists(atPath: layout.migratedBackupURL.path) {
-          try fileManager.removeItem(at: layout.migratedBackupURL)
-        }
         do {
+          if fileManager.fileExists(atPath: layout.migratedBackupURL.path) {
+            try fileManager.removeItem(at: layout.migratedBackupURL)
+          }
           try fileManager.moveItem(
             at: layout.currentAppURL,
             to: layout.migratedBackupURL

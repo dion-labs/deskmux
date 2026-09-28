@@ -237,3 +237,48 @@ func installerRejectsExtractedBundleMismatch(_ failure: String) throws {
   #expect(try FileManager.default.contentsOfDirectory(atPath: fixture.staging.path).isEmpty)
   #expect(!FileManager.default.fileExists(atPath: fixture.receipt.path))
 }
+
+@Test(arguments: [true, false])
+func installerMigrationRetirementFailureRestoresCanonicalBundle(hasCanonical: Bool) throws {
+  let fixture = try InstallerFixture()
+  let bootstrap = fixture.root.appendingPathComponent("Downloads/DeskMux.app")
+  let migratedBackup = bootstrap.deletingLastPathComponent()
+    .appendingPathComponent(".DeskMux.migrated.previous")
+  let protected = migratedBackup.appendingPathComponent("protected")
+  defer {
+    try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: protected.path)
+    fixture.remove()
+  }
+  try fixture.sign(fixture.current)
+  try FileManager.default.createDirectory(at: bootstrap.deletingLastPathComponent(), withIntermediateDirectories: true)
+  try FileManager.default.moveItem(at: fixture.current, to: bootstrap)
+  if hasCanonical {
+    try FileManager.default.copyItem(at: bootstrap, to: fixture.current)
+  }
+  try FileManager.default.createDirectory(at: protected, withIntermediateDirectories: true)
+  let sentinel = protected.appendingPathComponent("sentinel")
+  try Data("previous migration backup".utf8).write(to: sentinel)
+  try FileManager.default.setAttributes([.posixPermissions: 0], ofItemAtPath: protected.path)
+  try #require(!FileManager.default.isReadableFile(atPath: protected.path))
+  let candidate = try fixture.candidate()
+  let result = DeskMuxAppUpdateInstaller.verifyInstall(try DeskMuxAppUpdatePackager.packageApp(at: candidate),
+    currentAppURL: bootstrap, applicationsDirectory: fixture.applications,
+    stagingParent: fixture.staging, receiptURL: fixture.receipt, relaunch: { fixture.relaunches.append($0) })
+  guard case .rejected(let reason) = result else {
+    Issue.record("Backup-retirement failure was not rejected")
+    return
+  }
+  #expect(reason.contains(".DeskMux.migrated.previous"))
+  #expect(fixture.relaunches.isEmpty)
+  #expect(!FileManager.default.fileExists(atPath: fixture.receipt.path))
+  #expect(try Data(contentsOf: bootstrap.appendingPathComponent("Contents/Resources/marker")) == Data("old".utf8))
+  if hasCanonical {
+    #expect(try Data(contentsOf: fixture.current.appendingPathComponent("Contents/Resources/marker")) == Data("old".utf8))
+  } else {
+    #expect(!FileManager.default.fileExists(atPath: fixture.current.path))
+  }
+  #expect(!FileManager.default.fileExists(atPath: fixture.applications.appendingPathComponent(".DeskMux.previous").path))
+  try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: protected.path)
+  #expect(try Data(contentsOf: sentinel) == Data("previous migration backup".utf8))
+  #expect(try FileManager.default.contentsOfDirectory(atPath: fixture.staging.path).isEmpty)
+}
