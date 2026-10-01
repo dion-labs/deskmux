@@ -527,3 +527,17 @@ private final class ConnectionTestState: @unchecked Sendable {
     }
   }
 }
+
+@Test func unreachableRouteYieldsToAnotherInterfaceThenRecovers() {
+  let cooldown = InputRouteCooldown()
+  cooldown.recordFailure(peer: "macbook", interface: "awdl0", now: 100)
+  let failed = cooldown.priority(peer: "macbook", interface: "awdl0", base: 400, now: 101)
+  let wifi = cooldown.priority(peer: "macbook", interface: "en1", base: 200, now: 101)
+  #expect(failed < wifi)
+  #expect(cooldown.priority(peer: "studio", interface: "awdl0", base: 400, now: 101) == 400)
+  #expect(cooldown.priority(peer: "macbook", interface: "awdl0", base: 400, now: 130) == 400)
+  // Failure of Wi-Fi must also allow the direct route to recover.
+  cooldown.recordFailure(peer: "macbook", interface: "en1", now: 131)
+  #expect(cooldown.priority(peer: "macbook", interface: "en1", base: 200, now: 132)
+    < cooldown.priority(peer: "macbook", interface: "awdl0", base: 400, now: 132))
+}

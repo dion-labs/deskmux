@@ -205,6 +205,8 @@ public struct InputRelayLatencyReport: Codable, Equatable, Sendable {
 public final class BonjourInputRelaySource: @unchecked Sendable {
   public static let serviceType = "_deskmux-input._tcp"
 
+  private static let routeCooldown = InputRouteCooldown()
+
   private let sourcePeerID: PeerID
   private let destinationPeerID: PeerID
   private let sharedKey: String
@@ -684,6 +686,9 @@ public final class BonjourInputRelaySource: @unchecked Sendable {
       }
       peerConnection.cancel()
       if localNetworkDenied { throw BonjourInputRelayError.localNetworkPermissionMissing }
+      if let interface = discovered.interface {
+        Self.routeCooldown.recordFailure(peer: destinationPeerID.rawValue, interface: interface.name)
+      }
       throw BonjourInputRelayError.connectionTimedOutWithDetails(destinationPeerID, details)
     }
     if let failure = stateLock.withLock({ failure }) { throw failure }
@@ -769,12 +774,15 @@ public final class BonjourInputRelaySource: @unchecked Sendable {
         guard case .service(let name, _, _, _) = result.endpoint,
           let rank = deskMuxServiceRank(name: name, peerID: destinationPeerID)
         else { return nil }
-        let interface = result.interfaces.max {
-          deskMuxRoutePriority(interface: $0) < deskMuxRoutePriority(interface: $1)
+        func priority(_ interface: NWInterface) -> Int {
+          Self.routeCooldown.priority(
+            peer: destinationPeerID.rawValue, interface: interface.name,
+            base: deskMuxRoutePriority(interface: interface))
         }
+        let interface = result.interfaces.max { priority($0) < priority($1) }
         return (
           rank,
-          interface.map(deskMuxRoutePriority(interface:)) ?? 0,
+          interface.map(priority) ?? 0,
           result.endpoint,
           interface
         )
@@ -1477,4 +1485,37 @@ func deskMuxServiceRank(name: String, peerID: PeerID) -> Int? {
   let start = name.index(name.startIndex, offsetBy: base.count + 2)
   let end = name.index(before: name.endIndex)
   return Int(name[start..<end])
+}
+
+/// Shared across relay instances so a supervisor retry does not repeatedly pick
+/// the same unreachable interface. Keep a failed route as a last resort when it
+/// is the only advertised path; restore its normal preference after 30 seconds.
+final class InputRouteCooldown: @unchecked Sendable {
+  private struct Route: Hashable {
+    let peer: String
+    let interface: String
+  }
+  private let lock = NSLock()
+  private var failures: [Route: TimeInterval] = [:]
+
+  func recordFailure(
+    peer: String, interface: String, now: TimeInterval = ProcessInfo.processInfo.systemUptime
+  ) {
+    lock.withLock {
+      failures = failures.filter { $0.value > now }
+      failures[Route(peer: peer, interface: interface)] = now + 30
+    }
+  }
+
+  func priority(
+    peer: String, interface: String, base: Int,
+    now: TimeInterval = ProcessInfo.processInfo.systemUptime
+  ) -> Int {
+    lock.withLock {
+      guard let until = failures[Route(peer: peer, interface: interface)], until > now else {
+        return base
+      }
+      return base - 1_000
+    }
+  }
 }

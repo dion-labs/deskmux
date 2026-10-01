@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.11 — Recover from an unreachable network route
+
+- Temporarily lower the preference of a peer network interface after a connection
+  timeout, allowing the next attempt to use another advertised route. Restore
+  normal preference after 30 seconds; keep the only available route eligible.
+- Include the prior updater cleanup, output-draining and migration rollback fixes.
+
 ## 0.2.7 — Reliable diagnostic appends
 
 - Prevent concurrent network and handoff log writers from overwriting or
